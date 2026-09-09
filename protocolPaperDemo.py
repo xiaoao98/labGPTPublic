@@ -8,17 +8,6 @@ database_path = cfg.DATABASE_PATH
 model_name = cfg.MODEL_NAME
 
 
-def load_paper_protocols():
-    """Load published-method excerpts as a raw JSON text block.
-
-    This was previously a 35 KB triple-quoted literal holding verbatim Methods
-    sections from published papers. Text of that kind is copyrighted by its
-    publishers regardless of who wrote it, so it does not belong inlined in source
-    or in a public repository. It now loads from the corpus directory like every
-    other data source.
-    """
-    with open(cfg.require(cfg.PAPER_PROTOCOLS_PATH), encoding="utf-8") as handle:
-        return handle.read()
 
 def run_chat() -> None:
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -66,7 +55,7 @@ def run_chat() -> None:
             chat_input = query
             print("Protocol not found in the lab corpus, searching the public dataset ... ")
         else:
-            chat_input = "Here is the reagents: " + database_reagent_response + '\n' + "Here is the protocol: " + database_protocol_response + '\n' + "Here is some information from the paper: " + load_paper_protocols() + "Then answer this question precisely: " + query
+            chat_input = "Here is the reagents: " + database_reagent_response + '\n' + "Here is the protocol: " + database_protocol_response + '\n' + "Then answer this question precisely: " + query
             print("The reagent for the experiment is: " + '\n' + database_reagent_response)
             print("The protocol for the experiment is: " + '\n' + database_protocol_response)
             print("Then let me think about the question...")

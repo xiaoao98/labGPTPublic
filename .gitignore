@@ -31,3 +31,6 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 metrics*.jsonl
+
+# Generated retrieval index. Rebuild with: python -m labrag.cli index
+.index/

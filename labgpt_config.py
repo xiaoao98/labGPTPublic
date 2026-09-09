@@ -26,7 +26,6 @@ PROTOCOLS_CSV = DATA_DIR / "protocols.csv"
 REAGENTS_CSV = DATA_DIR / "reagents.csv"
 PAPERS_PATH = DATA_DIR / "papers.json"
 PAPER_CONTENT_PATH = DATA_DIR / "paper_content.json"
-PAPER_PROTOCOLS_PATH = DATA_DIR / "paper_protocols.json"
 
 MODEL_NAME = os.environ.get("LABGPT_MODEL", "Qwen/Qwen3-32B")
 

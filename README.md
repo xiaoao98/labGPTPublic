@@ -126,6 +126,7 @@ These are real and are worth stating plainly.
 | `demo.py` | Main chat loop, routes across all domains |
 | `labgpt_config.py` | Paths, model, corpus location |
 | `labgpt_metrics.py` | Per-call token and latency instrumentation |
+| `labrag/` | Retrieval layer: chunking, ingest, embeddings, index |
 | `protocolDemo.py` | Protocol and reagent lookup over SQLite |
 | `safetyDemo.py` | Safety corpus loading |
 | `memberInfoDemo.py` | Team directory loading |

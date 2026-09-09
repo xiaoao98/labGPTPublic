@@ -1,27 +1,32 @@
 # Sample corpus
 
-Everything in this directory is **synthetic**. It exists so the assistant can be run,
-tested, and demonstrated without any real institutional data.
+This directory is **mixed**. Read the table below before assuming anything here is
+invented.
 
-The Vance Lab at the Northwind Institute for Biomedical Research does not exist. The
-people, protocols, reagents, papers, phone numbers, and email addresses are invented.
-Phone numbers use the 555-01xx range reserved for fiction, and email addresses use
-`example.edu`, a reserved documentation domain.
+`members.tsv` and `memberinfo.txt` hold **real people**: 37 named members of a real
+research laboratory, with biographies taken from the laboratory's public web page. Every
+other file is synthetic.
 
-The scientific content is plausible but is **not** validated laboratory guidance. Do not
-follow any protocol or safety instruction in this directory. It is placeholder text shaped
-to exercise the retrieval and chunking code.
+The synthetic files describe the Vance Lab at the Northwind Institute for Biomedical
+Research, which does not exist. Their people, protocols, reagents, papers, phone numbers,
+and email addresses are invented; phone numbers use the 555-01xx range reserved for
+fiction and addresses use `example.edu`, a reserved documentation domain.
+
+The synthetic scientific content is plausible but is **not** validated laboratory
+guidance. Do not follow any protocol or safety instruction in this directory. It is
+placeholder text shaped to exercise the retrieval and chunking code.
 
 ## Files
 
-| File | Shape | Replaces |
+| File | Real or synthetic | Shape |
 |---|---|---|
-| `members.tsv` | `name<TAB>role<TAB>bio` per line | the lab directory |
-| `safety.json` | `[{instruction, input, output}]` | the safety Q&A set |
-| `protocols.csv` | `experiment,content` | the protocol table |
-| `reagents.csv` | `experiment,content` | the reagent table |
-| `papers.json` | `{id: {title, abstract}}` | the publication abstract index |
-| `paper_content.json` | `{id: {title, method, result}}` | full paper method and result sections |
+| `members.tsv` | **real people** | `name<TAB>role<TAB>bio` per line |
+| `memberinfo.txt` | **real people** | raw source for `members.tsv`, one long tab-run |
+| `safety.json` | synthetic | `[{instruction, input, output}]` |
+| `protocols.csv` | synthetic | `experiment,content` |
+| `reagents.csv` | synthetic | `experiment,content` |
+| `papers.json` | synthetic | `{id: {title, abstract}}` |
+| `paper_content.json` | synthetic | `{id: {title, method, result}}` |
 
 ## Building the database
 
