@@ -1,0 +1,26 @@
+{
+    "1": {
+        "title": "Stromal vesicle transfer reshapes fibroblast heterogeneity in pancreatic tumors",
+        "abstract": "Cancer-associated fibroblasts occupy distinct transcriptional states within the pancreatic tumor microenvironment, but the signals that establish those states remain incompletely defined. Here we profile 180,000 stromal cells by single-cell RNA sequencing across twelve synthetic donor samples and identify four recurrent fibroblast programs. Vesicle-mediated transfer from tumor cells shifts the balance between two of these programs in a dose-dependent manner. SYNTHETIC SAMPLE DATA. This paper does not exist."
+    },
+    "2": {
+        "title": "Macrophage polarization in response to tumor-derived extracellular vesicles",
+        "abstract": "Tumor-derived extracellular vesicles carry cargo capable of reprogramming recipient immune cells. We exposed primary macrophages to vesicles isolated by differential ultracentrifugation and measured surface marker expression by flow cytometry across a 72 hour time course. Vesicle exposure produced a mixed phenotype that did not map cleanly onto conventional polarization axes. SYNTHETIC SAMPLE DATA. This paper does not exist."
+    },
+    "3": {
+        "title": "A benchmark of vesicle isolation methods for downstream proteomic analysis",
+        "abstract": "Vesicle isolation method choice strongly influences downstream measurement, yet direct comparisons are scarce. We compared differential ultracentrifugation, size exclusion chromatography, and polymer precipitation on matched conditioned media, evaluating yield, purity, and protein identification depth. Ultracentrifugation gave the highest purity and the lowest yield. SYNTHETIC SAMPLE DATA. This paper does not exist."
+    },
+    "4": {
+        "title": "Computational deconvolution of stromal composition from bulk RNA sequencing",
+        "abstract": "Bulk transcriptomes conflate signal from many cell types. We developed a reference-based deconvolution approach anchored on single-cell profiles from matched samples and evaluated it against held-out mixtures of known composition. Estimation error rose sharply for cell types below three percent abundance. SYNTHETIC SAMPLE DATA. This paper does not exist."
+    },
+    "5": {
+        "title": "Tetraspanin marker stability across freeze-thaw cycles in isolated vesicles",
+        "abstract": "Vesicle preparations are frequently stored and re-analyzed, but the stability of standard markers under storage is rarely reported. We subjected isolated vesicles to up to five freeze-thaw cycles and quantified CD9, CD63, and CD81 by western blot and nanoparticle tracking. Signal for all three markers declined measurably after the second cycle. SYNTHETIC SAMPLE DATA. This paper does not exist."
+    },
+    "6": {
+        "title": "Single-cell resolution mapping of hypoxic niches in solid tumor models",
+        "abstract": "Hypoxic regions within solid tumors sustain distinct cellular programs. We combined spatial transcriptomics with single-cell profiling across synthetic tumor models to map the boundary between normoxic and hypoxic compartments. Transitional cells at the boundary expressed a program distinct from cells in either compartment. SYNTHETIC SAMPLE DATA. This paper does not exist."
+    }
+}

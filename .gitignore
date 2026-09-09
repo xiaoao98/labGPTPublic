@@ -1,0 +1,32 @@
+# Secrets. Never commit these.
+.env
+.env.*
+!.env.example
+*.key
+credentials.json
+service-account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local model and data caches
+.cache/
+*.log
+
+# Databases. The .db files already committed stay tracked (gitignore does not
+# affect tracked paths); this only stops new ones. To untrack the existing set,
+# see the review notes on `git rm --cached`.
+*.db
+*.sqlite
+*.sqlite3

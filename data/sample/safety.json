@@ -1,0 +1,82 @@
+[
+    {
+        "instruction": "What do 2 gallon sharps containers accept",
+        "input": "",
+        "output": "Razors, needles, scalpel blades, scissors, and any item that can puncture skin. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "What should we pay attention to when using 2 gallon sharps containers",
+        "input": "",
+        "output": "Do not reach into the container. Do not overfill past the marked fill line. Seal the container before requesting pickup from the lab manager. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "What are the recommended actions to prevent and address clogged sinks in laboratory settings",
+        "input": "",
+        "output": "Avoid disposing of laboratory consumables or agar down the sink. Use a drain strainer and dispose of solids in biohazard waste containers. Do not attempt to clear a clogged drain with bleach or harsh disinfectants. If a sink becomes clogged, contact Facilities Maintenance at 555-0170. For additional guidance contact Environmental Health and Safety at safety@example.edu. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "What is Biosafety Level 1 (BSL-1)",
+        "input": "",
+        "output": "BSL-1 laboratories work with agents that do not cause disease in healthy adults, known as avirulent organisms. They pose minimal hazard to personnel and the environment, and standard microbiological practices are sufficient. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "What type of agents are handled in a Biosafety Level 2 (BSL-2) laboratory",
+        "input": "",
+        "output": "BSL-2 laboratories handle agents that pose moderate risk and can cause mild or treatable disease in humans. Exposure routes include broken skin, mucous membranes, and ingestion. Examples include human-derived blood and blood products, Staphylococcus aureus, and human cell lines. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "What precautions are required for Biosafety Level 3 (BSL-3)",
+        "input": "",
+        "output": "BSL-3 work involves agents with respiratory transmission potential or lethal consequences. Specialized training and personal protective equipment are mandatory, and the facility has enhanced engineering controls to prevent release of aerosol-transmitted pathogens. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "Who should be contacted for more information about BSL-3 laboratories",
+        "input": "",
+        "output": "Contact the Institute Biosafety Office at 555-0181 or safety@example.edu before beginning any BSL-3 work. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "What should I do after a needlestick injury",
+        "input": "",
+        "output": "Wash the site immediately with soap and water. Report the incident to your supervisor and the laboratory manager without delay. Call the Occupational Health line at 555-0193, which is staffed 24 hours a day, and follow their instructions for evaluation and follow-up. Complete an incident report within 24 hours. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "Who do I call for a large chemical spill",
+        "input": "",
+        "output": "Evacuate the immediate area and close the door. Call the Emergency Spill Response line at 555-0100, available 24 hours a day. Do not attempt to clean a spill larger than 100 mL of a hazardous material yourself. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "How should I clean up a small biological spill",
+        "input": "",
+        "output": "Wearing gloves, a lab coat, and eye protection, cover the spill with absorbent material and apply an appropriate disinfectant from the outside inward. Allow the disinfectant to sit for the contact time listed on the label, then collect the material. Place used absorbent material and PPE in a biohazard bag, seal it, and place it in the biohazard waste container. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "What personal protective equipment is required in the lab",
+        "input": "",
+        "output": "A buttoned lab coat, safety glasses, closed-toe shoes, and gloves appropriate to the material being handled. Gloves must be removed before touching door handles, keyboards, or phones. Lab coats are not worn outside the laboratory area. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "How do I dispose of biohazardous liquid waste",
+        "input": "",
+        "output": "Collect liquid biohazardous waste in a labeled, leak-proof secondary container. Chemically disinfect with a final concentration of 10 percent bleach and a minimum contact time of 30 minutes before drain disposal, where permitted. Contact the laboratory manager to schedule pickup for material that cannot be drain-disposed. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "What are the requirements for autoclave use",
+        "input": "",
+        "output": "Complete autoclave training before first use. Do not autoclave sealed containers, flammable material, or bleach. Use heat-resistant gloves and a face shield when unloading. Record each cycle in the autoclave log and verify the chemical indicator before removing material. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "Where should flammable solvents be stored",
+        "input": "",
+        "output": "Store flammable solvents in a dedicated flammables cabinet. Do not store them in a standard laboratory refrigerator; only explosion-proof or laboratory-safe refrigerators may hold flammable material. Keep quantities outside the cabinet below the posted limit for the room. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "What do I do if there is a fire in the laboratory",
+        "input": "",
+        "output": "Activate the nearest pull station and evacuate using the stairs. Do not use elevators. Call 911 from a safe location, then notify the Institute Security desk at 555-0105. Only attempt to use a fire extinguisher on a small, contained fire if you have been trained and have a clear exit behind you. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    },
+    {
+        "instruction": "Who is the laboratory safety contact",
+        "input": "",
+        "output": "Grace Abiodun, Laboratory Manager, is the first contact for safety questions, training records, and waste pickup scheduling, at gabiodun@example.edu or 555-0121. Institute Environmental Health and Safety can be reached at safety@example.edu. SYNTHETIC SAMPLE DATA, not real safety guidance."
+    }
+]

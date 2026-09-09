@@ -1,0 +1,4 @@
+# Normalize line endings so the repo is identical on Windows, macOS, and Linux.
+* text=auto eol=lf
+*.csv text eol=lf
+*.tsv text eol=lf

@@ -1,0 +1,48 @@
+Tumor digestion for cryopreservation,"1. Mince tissue with a razor blade on ice until no fragment exceeds 1 mm.
+2. Digest in a 50 mL conical tube for 45 minutes at 37 C with shaking at 150 rpm.
+3. Quench the digestion with 10 mL of complete media containing 10 percent FBS.
+4. Filter the suspension through a 70 um strainer into a fresh 50 mL conical tube.
+5. Centrifuge at 300 x g for 5 minutes at 4 C and discard the supernatant.
+6. Resuspend the pellet in 1 mL of ACK lysis buffer for 2 minutes at room temperature to remove red blood cells.
+7. Quench with 10 mL of PBS, centrifuge again at 300 x g for 5 minutes at 4 C.
+8. Count viable cells with trypan blue. Do not proceed if viability is below 70 percent; repeat the digestion with a shorter incubation instead.
+9. Resuspend at 2 million cells per mL in cryopreservation media and aliquot 1 mL per cryovial.
+10. Transfer vials to a controlled-rate freezing container at minus 80 C overnight, then move to liquid nitrogen within 24 hours. SYNTHETIC SAMPLE DATA, not a validated protocol."
+Cell line cryorecovery,"1. Remove the cryovial from liquid nitrogen and transport it on dry ice. Wear a face shield and cryogenic gloves.
+2. Thaw the vial in a 37 C water bath for 90 to 120 seconds, until a small ice crystal remains. Do not exceed 3 minutes.
+3. Wipe the vial with 70 percent ethanol before opening it in the biosafety cabinet.
+4. Transfer the contents dropwise into 9 mL of pre-warmed complete media.
+5. Centrifuge at 200 x g for 5 minutes at room temperature to remove residual DMSO.
+6. Discard the supernatant and resuspend the pellet in 10 mL of complete media.
+7. Plate into a T-25 flask and incubate at 37 C with 5 percent CO2.
+8. Change the media after 24 hours to remove non-adherent debris.
+9. Record the passage number and thaw date in the cell bank log. SYNTHETIC SAMPLE DATA, not a validated protocol."
+Cell line cryopreservation,"1. Grow cells to 80 percent confluence. Do not freeze cultures above 90 percent confluence.
+2. Aspirate media and wash the monolayer once with 5 mL of PBS.
+3. Detach with 1 mL of cell dissociation buffer for 3 to 5 minutes at 37 C.
+4. Quench with 9 mL of complete media and transfer to a 15 mL conical tube.
+5. Count cells and centrifuge at 200 x g for 5 minutes.
+6. Resuspend the pellet in cold cryopreservation media at 2 million cells per mL.
+7. Aliquot 1 mL per labeled cryovial. Label with cell line, passage number, date, and initials.
+8. Freeze at minus 1 C per minute to minus 80 C, then transfer to liquid nitrogen within 24 hours.
+9. Update the cell bank inventory with the vial count and freezer position. SYNTHETIC SAMPLE DATA, not a validated protocol."
+Exosome isolation by differential ultracentrifugation,"1. Collect conditioned media from cells cultured for 48 hours in exosome-depleted FBS.
+2. Centrifuge at 300 x g for 10 minutes at 4 C to pellet cells. Retain the supernatant.
+3. Centrifuge at 2000 x g for 20 minutes at 4 C to remove dead cells and large debris.
+4. Centrifuge at 10000 x g for 30 minutes at 4 C to remove microvesicles.
+5. Filter the supernatant through a 0.22 um filter.
+6. Ultracentrifuge at 100000 x g for 70 minutes at 4 C. Balance rotor buckets to within 0.01 g.
+7. Discard the supernatant and wash the pellet in 30 mL of cold PBS.
+8. Repeat the 100000 x g spin for 70 minutes at 4 C.
+9. Resuspend the final pellet in 100 uL of PBS and store at minus 80 C. Avoid repeated freeze-thaw cycles.
+10. Characterize by nanoparticle tracking analysis within one week of isolation. SYNTHETIC SAMPLE DATA, not a validated protocol."
+Western blot for vesicle markers,"1. Lyse the sample in RIPA buffer with protease inhibitor on ice for 30 minutes.
+2. Centrifuge at 14000 x g for 15 minutes at 4 C and collect the supernatant.
+3. Quantify protein by BCA assay against a BSA standard curve.
+4. Load 20 ug of protein per lane. Do not boil samples when probing for CD9, CD63, or CD81; these tetraspanins must be run under non-reducing conditions without heating.
+5. Separate on a 4 to 12 percent gradient gel at 120 V for 90 minutes.
+6. Transfer to a PVDF membrane at 100 V for 60 minutes at 4 C.
+7. Block in 5 percent non-fat milk in TBST for 1 hour at room temperature.
+8. Incubate with primary antibody overnight at 4 C with gentle rocking.
+9. Wash three times in TBST for 10 minutes each, then incubate with HRP-conjugated secondary for 1 hour at room temperature.
+10. Develop with ECL substrate and image. SYNTHETIC SAMPLE DATA, not a validated protocol."

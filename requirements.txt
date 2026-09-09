@@ -1,0 +1,24 @@
+# Core: model loading and the chat loop
+transformers>=4.44
+torch>=2.2
+rich>=13.0
+
+# Corpus ingest
+pandas>=2.0
+openpyxl>=3.1          # pandas needs this to read .xlsx
+python-docx>=1.1       # tools/concateDocumentsInDirectory.py
+
+# Web search and page fetching
+requests>=2.31
+ddgs>=9.0
+beautifulsoup4>=4.12
+readability-lxml>=0.8.1
+lxml>=5.0
+
+# Dynamic page fetching (search/getDynamicPage.py)
+selenium>=4.20
+webdriver-manager>=4.0
+
+# Optional: search/scrapegraphaitry.py only. Pulls a large dependency tree,
+# so install it separately if you actually need that script.
+# scrapegraphai>=1.0
