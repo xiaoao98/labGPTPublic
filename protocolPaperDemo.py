@@ -175,7 +175,7 @@ def print_model_response(tokenizer, model, input_content):
         model.generate(
             **model_inputs,
             streamer=streamer,
-            max_new_tokens=32768
+            max_new_tokens=4096
         )
     except Exception as e:
         print(f"\nError during model generation: {e}")

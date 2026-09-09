@@ -147,7 +147,7 @@ def print_model_response(tokenizer, model, input_content):
         model.generate(
             **model_inputs,
             streamer=streamer,
-            max_new_tokens=65536
+            max_new_tokens=2048  # was 65536, to emit five integers
         )
     except Exception as e:
         print(f"\nError during model generation: {e}")
@@ -170,7 +170,7 @@ def get_answers_only(tokenizer, model, input_content):
         # 1. Generate the output IDs
         generated_ids = model.generate(
             **model_inputs,
-            max_new_tokens=65536,
+            max_new_tokens=2048,  # was 65536, to emit five integers
             # Ensure we don't use the streamer here if we just want the return
         )
         

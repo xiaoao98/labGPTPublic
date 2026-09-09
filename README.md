@@ -50,6 +50,20 @@ python demo.py
 The individual domains can be run on their own: `protocolDemo.py`, `safetyDemo.py`,
 `memberInfoDemo.py`, `paperDemo.py`.
 
+## Measuring cost per query
+
+Every call to the model records prompt tokens, generated tokens, and wall time. This exists
+so that the retrieval work has a measured baseline to be compared against rather than an
+estimated one.
+
+```bash
+LABGPT_METRICS=metrics.jsonl python demo.py     # run some queries, then exit
+python labgpt_metrics.py metrics.jsonl          # per-stage breakdown
+```
+
+Token counts come from the input and output tensors, so they are exact for the tokenizer in
+use, not an approximation.
+
 ## Configuration
 
 Everything resolves through `labgpt_config.py`. Override with environment variables, or
@@ -61,6 +75,7 @@ copy `.env.example` to `.env`:
 | `LABGPT_DB_PATH` | `experiments.db` | Generated SQLite database |
 | `LABGPT_MODEL` | `Qwen/Qwen3-32B` | Hugging Face model id |
 | `LABGPT_ASSISTANT_NAME` | `LabGPT` | Name shown in the chat prompt |
+| `LABGPT_METRICS` | unset | Path to write per-call metrics JSONL; off when unset |
 | `GOOGLE_API_KEY` | unset | Optional, for `search/callGoogleAPI.py` |
 | `GOOGLE_SEARCH_ENGINE_ID` | unset | Optional, for `search/callGoogleAPI.py` |
 
@@ -110,6 +125,7 @@ These are real and are worth stating plainly.
 |---|---|
 | `demo.py` | Main chat loop, routes across all domains |
 | `labgpt_config.py` | Paths, model, corpus location |
+| `labgpt_metrics.py` | Per-call token and latency instrumentation |
 | `protocolDemo.py` | Protocol and reagent lookup over SQLite |
 | `safetyDemo.py` | Safety corpus loading |
 | `memberInfoDemo.py` | Team directory loading |

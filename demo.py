@@ -9,8 +9,16 @@ from paperDemo import fetch_paper_data
 from rich import print as rprint
 import json
 import labgpt_config as cfg
+import labgpt_metrics as metrics
 
 model_name = cfg.MODEL_NAME
+
+# Generation caps. Every one of these was 32768 or 65536, for answers measured in words.
+# The cap is what the caller can actually use, plus headroom.
+MAX_NEW_TOKENS_YESNO = 8      # "yes" / "no"
+MAX_NEW_TOKENS_CLASSIFY = 32  # "safety, experiment reagent and protocol" is ~12 tokens
+MAX_NEW_TOKENS_IDS = 2048     # thinking budget plus "1, 5, 12, 22, 30"
+MAX_NEW_TOKENS_ANSWER = 4096  # the user-facing answer
 ifSearchContent = "Search is NEEDED (true) for: 1. Real-time information: Weather, stock prices, traffic, sports scores. 2. Recent events: Anything that happened after your late 2023 knowledge cutoff. 3. Specific people or entities: Questions about non-famous individuals or specific company news. 4. Niche or local information: Store hours, specific product recommendations, local regulations." + '\n'
 ifSearchContent += "Does this query need to do the web search (Answer can only be one word: yes or no):  "
 classifyContent = "You are a lab assistant AI, respond with the category name (safety, experiment reagent and protocol) for all the information you need to answer this question. If it contain several categories, respond them all split by comma. If it does not need any of them, respond with general. **Question**: "
@@ -77,13 +85,16 @@ def run_chat() -> None:
         #     response += new_text
         # print("database_response: " + database_response)
         ifSearchQuery = ifSearchContent + query
-        ifSearch = getAnswer(tokenizer, model, ifSearchQuery).lower()
+        ifSearch = getAnswer(tokenizer, model, ifSearchQuery,
+                             MAX_NEW_TOKENS_YESNO, label="classify:web").lower()
         # print(ifSearch)
         ifSearchPaperQuery = ifSearchPapersContent + query
-        ifSearchPaper = getAnswer(tokenizer, model, ifSearchPaperQuery).lower()
+        ifSearchPaper = getAnswer(tokenizer, model, ifSearchPaperQuery,
+                                  MAX_NEW_TOKENS_YESNO, label="classify:paper").lower()
         # print("here " + ifSearchPaper)
         classifyQuery = classifyContent + query
-        dataClassArray = getAnswer(tokenizer, model, classifyQuery).split(",")
+        dataClassArray = getAnswer(tokenizer, model, classifyQuery,
+                                   MAX_NEW_TOKENS_CLASSIFY, label="classify:domain").split(",")
         # print(dataClassArray)
         finalQuery = "You are a lab assistant AI." + '\n'
         if "safety" in dataClassArray:
@@ -132,11 +143,21 @@ def run_chat() -> None:
         
 
 
-def getAnswer(tokenizer, model, input_content) -> str: 
+def getAnswer(tokenizer, model, input_content, max_new_tokens=MAX_NEW_TOKENS_YESNO,
+              label="classify") -> str:
+    """Short, deterministic classification calls.
+
+    `max_new_tokens` used to be 32768 here, for answers that are a single word. Three of
+    these run before any answering begins, so the budget was 98K tokens of generation to
+    decide routing. The cap now matches what the caller can actually receive; see the
+    MAX_NEW_TOKENS_* constants.
+
+    Sampling is off. Routing decisions should be reproducible, otherwise the same question
+    can take different paths on different runs and the evaluation set means nothing.
+    """
     messages = [
         {"role": "user", "content": input_content}
     ]
-    # question = "I have three types of question: memberinfo, safety, biology experiment protocol. Please answer me the type of the following question (you can only choose one):  What does 2 Gallon sharps containers accepts. The answer should only be the type, no more explanation"
 
     text = tokenizer.apply_chat_template(
         messages,
@@ -145,17 +166,23 @@ def getAnswer(tokenizer, model, input_content) -> str:
         enable_thinking=False # Switches between thinking and non-thinking modes. Default is True.
     )
     model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
-    # streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
     try:
-        generated_ids = model.generate(
-            **model_inputs,
-            # streamer=streamer,
-            max_new_tokens=32768
-        )
+        with metrics.timer() as elapsed:
+            generated_ids = model.generate(
+                **model_inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False
+            )
         output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
+        metrics.record(
+            label,
+            prompt_tokens=model_inputs.input_ids.shape[1],
+            generated_tokens=len(output_ids),
+            elapsed_s=elapsed[0],
+            cap=max_new_tokens,
+        )
         content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
         return content
-        # print(content)
     except Exception as e:
         print(f"\nError during model generation: {e}")
         return ""
@@ -185,11 +212,22 @@ def getIDs(tokenizer, model, query):
     IDs = get_answers_only_for_thinking(tokenizer, model, full_instructional_prompt)
     return IDs
 
-def get_answers_only_for_thinking(tokenizer, model, input_content):
+def get_answers_only_for_thinking(tokenizer, model, input_content,
+                                  max_new_tokens=MAX_NEW_TOKENS_IDS,
+                                  label="paper_ids"):
+    """Generate with thinking enabled and return only the post-thinking answer.
+
+    Two changes from the original. The cap was 65536 to produce a comma-separated list of
+    five integers; it is now a budget that covers the reasoning plus the answer.
+
+    More importantly, this used to return None implicitly whenever "</think>" was absent
+    from the response, which happens whenever the token budget runs out mid-thought. The
+    caller then passed None into fetch_paper_data, which called None.split(',') and
+    crashed. Now a truncated response falls back to the raw text and says so.
+    """
     messages = [
         {"role": "user", "content": input_content}
     ]
-    # question = "I have three types of question: memberinfo, safety, biology experiment protocol. Please answer me the type of the following question (you can only choose one):  What does 2 Gallon sharps containers accepts. The answer should only be the type, no more explanation"
 
     text = tokenizer.apply_chat_template(
         messages,
@@ -198,24 +236,36 @@ def get_answers_only_for_thinking(tokenizer, model, input_content):
         enable_thinking=True # Switches between thinking and non-thinking modes. Default is True.
     )
     model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
-    # streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
     try:
-        # 1. Generate the output IDs
-        generated_ids = model.generate(
-            **model_inputs,
-            max_new_tokens=65536,
-            # Ensure we don't use the streamer here if we just want the return
-        )
-        
-        # 2. Slice the IDs to remove the original prompt tokens
-        # model.generate returns the prompt + the new tokens
+        with metrics.timer() as elapsed:
+            generated_ids = model.generate(
+                **model_inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False
+            )
+
         new_tokens = generated_ids[0][len(model_inputs.input_ids[0]):]
-        
-        # 3. Decode to string
         response_text = tokenizer.decode(new_tokens, skip_special_tokens=True)
+
+        metrics.record(
+            label,
+            prompt_tokens=model_inputs.input_ids.shape[1],
+            generated_tokens=len(new_tokens),
+            elapsed_s=elapsed[0],
+            cap=max_new_tokens,
+            truncated="</think>" not in response_text,
+        )
+
         if "</think>" in response_text:
-            final_answer = response_text.split("</think>")[-1].strip()
-            return final_answer
+            return response_text.split("</think>")[-1].strip()
+
+        # Budget ran out before the model finished thinking. Return what there is rather
+        # than None, so the caller fails on bad content instead of on a NoneType.
+        print(
+            f"\nWarning: generation hit the {max_new_tokens} token cap before finishing. "
+            "Raise max_new_tokens if this recurs."
+        )
+        return response_text.strip()
     except Exception as e:
         print(f"\nError during model generation: {e}")
 
@@ -235,10 +285,21 @@ def print_model_response(tokenizer, model, input_content, ifThinking):
     model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
     streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
     try:
-        model.generate(
-            **model_inputs,
-            streamer=streamer,
-            max_new_tokens=32768
+        with metrics.timer() as elapsed:
+            generated_ids = model.generate(
+                **model_inputs,
+                streamer=streamer,
+                max_new_tokens=MAX_NEW_TOKENS_ANSWER
+            )
+        # This is the call that carries the assembled prompt, so its prompt_tokens is the
+        # number the retrieval work is trying to bring down.
+        metrics.record(
+            "answer",
+            prompt_tokens=model_inputs.input_ids.shape[1],
+            generated_tokens=len(generated_ids[0]) - model_inputs.input_ids.shape[1],
+            elapsed_s=elapsed[0],
+            cap=MAX_NEW_TOKENS_ANSWER,
+            thinking=bool(ifThinking),
         )
     except Exception as e:
         print(f"\nError during model generation: {e}")
@@ -275,15 +336,23 @@ def stream_and_return_response(tokenizer, model, input_content, ifThinking):
     streamer = TextCaptureStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
 
     try:
-        model.generate(
-            **model_inputs,
-            streamer=streamer,
-            max_new_tokens=32768
+        with metrics.timer() as elapsed:
+            generated_ids = model.generate(
+                **model_inputs,
+                streamer=streamer,
+                max_new_tokens=MAX_NEW_TOKENS_ANSWER
+            )
+        metrics.record(
+            "web_summary",
+            prompt_tokens=model_inputs.input_ids.shape[1],
+            generated_tokens=len(generated_ids[0]) - model_inputs.input_ids.shape[1],
+            elapsed_s=elapsed[0],
+            cap=MAX_NEW_TOKENS_ANSWER,
         )
     except Exception as e:
         print(f"\nError during model generation: {e}")
         return None
-    
+
     # Return the text captured by the streamer
     return streamer.captured_text
 

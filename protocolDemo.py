@@ -1,11 +1,15 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
 import labgpt_config as cfg
+import labgpt_metrics as metrics
 import os
 import sqlite3  
 import re
 
 database_path = cfg.DATABASE_PATH
 model_name = cfg.MODEL_NAME
+
+# An experiment name from the list, or "not found". Was 3276.
+MAX_NEW_TOKENS_EXPERIMENT_NAME = 48
 
 def run_chat() -> None:
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -178,7 +182,7 @@ def print_model_response(tokenizer, model, input_content):
         model.generate(
             **model_inputs,
             streamer=streamer,
-            max_new_tokens=32768
+            max_new_tokens=4096
         )
     except Exception as e:
         print(f"\nError during model generation: {e}")
@@ -225,17 +229,23 @@ def getAnswer(tokenizer, model, input_content) -> str:
         enable_thinking=False # Switches between thinking and non-thinking modes. Default is True.
     )
     model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
-    # streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
     try:
-        generated_ids = model.generate(
-            **model_inputs,
-            # streamer=streamer,
-            max_new_tokens=3276
-        )
+        with metrics.timer() as elapsed:
+            generated_ids = model.generate(
+                **model_inputs,
+                max_new_tokens=MAX_NEW_TOKENS_EXPERIMENT_NAME,
+                do_sample=False
+            )
         output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
+        metrics.record(
+            "match_experiment",
+            prompt_tokens=model_inputs.input_ids.shape[1],
+            generated_tokens=len(output_ids),
+            elapsed_s=elapsed[0],
+            cap=MAX_NEW_TOKENS_EXPERIMENT_NAME,
+        )
         content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
         return content
-        # print(content)
     except Exception as e:
         print(f"\nError during model generation: {e}")
         return ""
