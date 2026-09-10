@@ -1296,5 +1296,18 @@
       "pmc_id": "PMC11648469",
       "reason": "conference proceedings volume, 94,738-char ABSTRACT"
     }
-  ]
+  ],
+  "second_source": {
+    "name": "private lab experiments.db",
+    "note": "The evaluation corpus is not reproducible from this manifest alone. It also contains protocols and reagents exported from a private laboratory SQLite database, which is not public and is not in this repository. Rebuild those with tools/export_experiments_db.py, tools/clean_corpus_csv.py and tools/merge_corpus_csv.py against your own database.",
+    "protocols_from_lab_db": 149,
+    "reagents_from_lab_db": 226,
+    "eval_questions_depending_on_it": "Roughly a quarter of eval/questions.yaml labels resolve only against the lab half. Without it, check_labels reports those doc_ids as unknown; that is expected, not a broken question set."
+  },
+  "corpus_totals": {
+    "protocols_csv_rows": 388,
+    "reagents_csv_rows": 249,
+    "protocols_from_pmc": 239,
+    "reagents_from_pmc": 23
+  }
 }

@@ -32,6 +32,12 @@
 # One known corpus inconsistency: safety.json is synthetic and names a laboratory manager
 # who does not appear in members.tsv, which holds real people. No question here depends on
 # reconciling the two.
+#
+# THIS SET NEEDS TWO CORPORA. Questions q063 to q088 label documents that come from a
+# private laboratory database, not from PubMed Central. Running check_labels against a
+# corpus built only from data/eval/manifest.json will report those doc_ids as unknown.
+# That is expected and is not a broken question set; see the second_source section of the
+# manifest for how the lab half is rebuilt.
 
 questions:
 
@@ -310,12 +316,6 @@ questions:
     relevant: [paper-PMC11256593-abstract]
     note: "CAF-1, H3K9me3, BRAFi resistance"
 
-  - id: q043
-    category: topic
-    question: "How is JAK inhibition related to myeloproliferative neoplasm treatment resistance?"
-    relevant: [paper-unknown-abstract]
-    note: "ruxolitinib, IL-6, ERK1/2 cross-talk"
-
   - id: q044
     category: topic
     question: "What methods exist for making tissue optically transparent for imaging?"
@@ -429,24 +429,6 @@ questions:
       - protocol-protocol-4-co-culture-flow-cytometry-and-f8d16a
     note: "derived: every protocol or reagent document mentioning DAPI (9 documents)"
 
-  - id: q060
-    category: cross_document
-    question: "Which procedures require working inside a biosafety cabinet?"
-    relevant:
-      - protocol-capturing-fluorescence-images-with-cq1-p-6a47a5
-      - protocol-cell-harvesting-pmc8686060-825c6d
-      - protocol-day-1-preparation-of-freestyletm-293-f-c-e3962a
-      - protocol-day-3-transfection-of-freestyletm-293-f-206f08
-      - protocol-e-gracilis-growth-pmc8686060-49783f
-      - protocol-isolation-of-evps-from-tissue-samples-pm-f9ba64
-      - protocol-prepare-cultured-vascular-endothelial-ce-79de26
-      - protocol-quick-fungal-dna-extraction-for-genotypi-ca2948
-      - protocol-serum-starve-cells-day-1-pmc7829267-fcd4eb
-      - protocol-thawing-and-recovery-of-e-gracilis-cells-9991db
-      - protocol-treat-endothelial-cells-with-test-agonis-3c36e5
-      - reagent-preparation-of-multi-omics-grade-extrace-647192
-    note: "derived: documents naming a biosafety or laminar flow cabinet (12 documents)"
-
   - id: q061
     category: cross_document
     question: "Which steps in these protocols use centrifugation at 300 x g?"
@@ -469,6 +451,216 @@ questions:
       - protocol-preparation-of-electroporation-pmc868365-97c5ac
       - protocol-t-cell-activation-pmc8683654-eaff7f
     note: "several stages of the same TCR replacement protocol article"
+
+
+  # --- lab corpus: exact_identifier -------------------------------------------
+  # Added after merging the lab experiments.db into the evaluation corpus. These
+  # cover content the PMC half does not have: genotyping primer cards, per cell
+  # line media formulations, and the split consolidated protocols.
+
+  - id: q063
+    category: exact_identifier
+    question: "What voltage is used for exosome electroporation?"
+    relevant: [protocol-exosomes-electroporation-the-electropora-98f6f4]
+    note: "400 V, optimal range noted as 200-400 V"
+
+  - id: q064
+    category: exact_identifier
+    question: "What size electroporation cuvette is used and how long is it pre-chilled?"
+    relevant: [protocol-exosomes-electroporation-the-electropora-98f6f4]
+    note: "4 mm cuvettes, pre-chilled on ice at least 30 minutes"
+
+  - id: q065
+    category: exact_identifier
+    question: "What are the FAP-TK genotyping primer sequences?"
+    relevant: [protocol-fap-tk-genotyping-065a0a]
+    note: "FAP TK F-93, FAP TK WT-509, FAP TK R-260 common reverse"
+
+  - id: q066
+    category: exact_identifier
+    question: "What band sizes distinguish a Ptf1a Flp homozygote?"
+    relevant: [protocol-ptf1a-flp-genotyping-protocol-4aaa14]
+    note: "two bands at 432 bp and 2644 bp; wildtype F3+R3 is 505 bp"
+
+  - id: q067
+    category: exact_identifier
+    question: "Which MMRRC stock is the Rab27b knockout line from?"
+    relevant: [protocol-rab27btm1a-genotyping-protocol-af8010]
+    note: "MMRRC Stock #: 049318-UCD"
+
+  - id: q068
+    category: exact_identifier
+    question: "How many exosomes per cell are used in the uptake assay?"
+    relevant: [protocol-exosome-uptake-assays-exosome-uptake-by-d43e93]
+    note: "typical concentration 10^4 exosomes per cell, 24 h at 37 C"
+
+  - id: q069
+    category: exact_identifier
+    question: "What is the internal control for Podocin Cre genotyping?"
+    relevant: [protocol-podocin-cre-aka-generic-cre-genotyping-a4222b]
+    note: "NPHS2 (podocin)"
+
+  # --- lab corpus: reagent lookups ---------------------------------------------
+  # The shortest documents in the corpus, some only six tokens, where almost all
+  # the retrievable signal is in the breadcrumb rather than the body. The
+  # synthetic corpus had nothing this thin.
+
+  - id: q070
+    category: exact_identifier
+    question: "What medium is used to recover HCT116 cells from frozen?"
+    relevant: [reagent-hct116-cryorecovery-514aa3]
+    note: "McCoy's-5A, 10% FBS, Glutamine, NEAA, 1% Pen/Strep"
+
+  - id: q071
+    category: exact_identifier
+    question: "What freezing medium is used for A549?"
+    relevant: [reagent-a549-cryopreservation-a95efc]
+    note: "45% FBS, 45% Complete Medium, 10% DMSO"
+
+  - id: q072
+    category: exact_identifier
+    question: "What glucose concentration is in the L1210 recovery medium?"
+    relevant: [reagent-l1210-cryorecovery-c27723]
+    note: "L15, 10% Foundation B FBS, 1% Pen/Strep, 2 g/L glucose"
+
+  - id: q073
+    category: exact_identifier
+    question: "What DMSO percentage is used for 4T07 cryopreservation?"
+    relevant: [reagent-4t07-cryopreservation-67aedf]
+    note: "5 percent, which is half what most other lines in this corpus use"
+
+  - id: q074
+    category: paraphrase
+    question: "What do I thaw T3M4 into?"
+    relevant: [reagent-t3m4-cryorecovery-6beed1]
+    note: "RPMI 10% FBS, 1% Pen/Strep; question avoids the word cryorecovery"
+
+  - id: q075
+    category: cross_document
+    question: "Which cell lines are cultured in FreeStyle media?"
+    relevant:
+      - reagent-293f-399966-cryorecovery-c22315
+      - reagent-293f-400956-cryorecovery-329dac
+      - reagent-293f-cd63-cryopreservation-cc2b47
+      - reagent-293f-cd63-cryorecovery-42266d
+      - reagent-293f-cd81-cryopreservation-1028d4
+      - reagent-293f-cd81-cryorecovery-0b945b
+      - reagent-293f-cd9-cryopreservation-25580d
+      - reagent-293f-cd9-cryorecovery-9cffc6
+      - reagent-293f-cryorecovery-55d4cb
+      - reagent-293f-wt-cryopreservation-6610c2
+      - reagent-293f-wt-cryorecovery-64dcf5
+    note: "derived: every reagent document whose text contains FreeStyle (11 documents)"
+
+  # --- lab corpus: procedure_detail ---------------------------------------------
+
+  - id: q076
+    category: procedure_detail
+    question: "What blocking solution and incubation are used for immunofluorescence on sections?"
+    relevant: [protocol-histological-and-histochemical-staining-cb278b]
+    note: "1% or 2% BSA in PBS or TBS, 1 hour at room temperature"
+
+  - id: q077
+    category: procedure_detail
+    question: "How long and at what temperature is the primary antibody left on for IF?"
+    relevant: [protocol-histological-and-histochemical-staining-cb278b]
+    note: "overnight at 4 C in a humid chamber"
+
+  - id: q078
+    category: procedure_detail
+    question: "How long should Bioanalyzer reagents sit out before use?"
+    relevant: [protocol-rna-processing-and-analysis-protocols-rn-a27667]
+    note: "equilibrate to room temperature for 30 minutes"
+
+  - id: q079
+    category: procedure_detail
+    question: "Which kit is used to get a RIN score?"
+    relevant: [protocol-rna-processing-and-analysis-protocols-rn-a27667]
+    note: "Agilent RNA 6000 Nano Kit"
+
+  - id: q080
+    category: procedure_detail
+    question: "What ratio tells me whether my protein prep is contaminated with nucleic acid?"
+    relevant: [protocol-protein-quantification-protocols-data-re-c44d85]
+    note: "A260/A280 ratio"
+
+  - id: q081
+    category: procedure_detail
+    question: "What do I clean the Nanodrop pedestals with between samples?"
+    relevant: [protocol-protein-quantification-protocols-data-re-c44d85]
+    note: "PBS between each sample measurement"
+
+  - id: q082
+    category: procedure_detail
+    question: "Which collagenase and catalog number go into the tumor digestion buffer?"
+    relevant: [reagent-tumor-digestion-for-cryopreservation-caf7ec]
+    note: "4 mg/mL collagenase IV, Gibco 17104019"
+
+  # --- lab corpus: paraphrase ---------------------------------------------------
+
+  - id: q083
+    category: paraphrase
+    question: "Which electroporator should I book for loading cargo into vesicles?"
+    relevant: [protocol-exosomes-electroporation-the-electropora-98f6f4]
+    note: "Biorad Gene Pulser Xcell, Exponential Decay Protocol"
+
+  - id: q084
+    category: paraphrase
+    question: "Who made the mCherry-CD9 reporter line?"
+    relevant: [protocol-rosa26-lsl-mcherry-cd9-genotyping-protoc-ae20eb]
+    note: "Generated by Amanda R Haltom, knock-in to the Rosa26 locus"
+
+
+  # --- additional safety and cross-document -----------------------------------
+
+  - id: q085
+    category: safety
+    question: "Can I put a capped bottle in the autoclave?"
+    relevant: [safety-012]
+    note: "no; do not autoclave sealed containers, flammable material, or bleach"
+
+  - id: q086
+    category: safety
+    question: "I knocked over a tube of cells on the bench, how do I clean it up?"
+    relevant: [safety-009]
+    note: "small biological spill: cover with absorbent material, disinfect outside inward, biohazard bag"
+
+  - id: q087
+    category: cross_document
+    question: "Which protocols use collagenase to digest tissue?"
+    relevant:
+      - protocol-2d-co-culture-assay-pmc8689363-f67176
+      - protocol-cell-isolation-protocols-isolation-of-ad-f874c2
+      - protocol-digestion-solution-pmc7811054-267f0d
+      - protocol-exosome-isolation-isolation-from-solid-t-d92b7a
+      - protocol-flow-cytometry-12014e
+      - protocol-obtain-a-cell-suspension-enriched-in-car-ef2257
+      - protocol-tumor-digestion-for-cryopreservation-caf7ec
+      - reagent-flow-cytometry-12014e
+      - reagent-tumor-digestion-for-cryopreservation-caf7ec
+    note: >-
+      derived: every protocol or reagent document mentioning collagenase (9 documents).
+      Spans both corpus sources, so it also tests whether PMC and lab content compete
+      fairly rather than one crowding out the other.
+
+  - id: q088
+    category: cross_document
+    question: "Which cell lines need puromycin in their recovery medium?"
+    relevant:
+      - protocol-antibiotic-kill-curve-protocol-846a56
+      - protocol-construction-of-stable-cell-lines-expres-b76572
+      - protocol-gene-delivery-chemical-transfection-and-5c1150
+      - reagent-4t1-gfp-luc-cryorecovery-eacece
+      - reagent-689kpc-gfp-luc-sushrut-cryorecovery-47be18
+      - reagent-e0771-gfp-luc-cryorecovery-c435fc
+      - reagent-gl261-gfp-luc-cryorecovery-dc8839
+      - reagent-panc1-gfp-luc-val-cryorecovery-95dcd7
+      - reagent-u87-mg-mcherry-luc-cryorecovery-bb2bf7
+      - reagent-u87mg-gfp-luc-cryorecovery-90a77a
+    note: >-
+      derived: every document mentioning puromycin (10 documents). Seven are the very
+      short reagent rows for GFP/Luc reporter lines, so this is a cross-document query
+      whose answers are almost entirely six-token documents.
 
   # --- unanswerable -----------------------------------------------------------
   # The corpus contains nothing that answers these. A correct system abstains.
