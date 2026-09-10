@@ -30,25 +30,60 @@ query
   +-- assemble one large prompt -> generate answer
 ```
 
-## Requirements
+## Setup
 
 - Python 3.10 or newer
-- A GPU with enough memory for the configured model. The default is `Qwen/Qwen3-32B`;
-  set `LABGPT_MODEL` to something smaller to run on modest hardware.
+- Building the retrieval index runs on CPU and takes a few seconds on this corpus
+- Answering needs a GPU with enough memory for the configured model. The default is
+  `Qwen/Qwen3-32B`; set `LABGPT_MODEL` to something smaller to run on modest hardware
+
+With [uv](https://docs.astral.sh/uv/):
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
+
+Or with pip:
+
+```bash
+python -m venv .venv && .venv/bin/pip install -e .
+```
+
+Optional extras: `search` for the web-search branch, `ingest` for the corpus
+preparation scripts in `buildDB/` and `tools/`, `dev` for pytest. With uv:
+`uv sync --extra search`.
 
 ## Running it
 
+Build the retrieval index first. It reads the corpus, chunks it, embeds the chunks
+locally, and writes `.index/`:
+
 ```bash
-python buildDB/build_sample_db.py    # generates experiments.db from the corpus CSVs
-python demo.py
+uv run python -m labrag.cli index
+```
+
+Then the assistant:
+
+```bash
+uv run python buildDB/build_sample_db.py    # generates experiments.db from the corpus CSVs
+uv run python demo.py
 ```
 
 The individual domains can be run on their own: `protocolDemo.py`, `safetyDemo.py`,
 `memberInfoDemo.py`, `paperDemo.py`.
+
+The embedding model downloads once, about 130 MB, and then runs offline.
+
+## Retrieval index
+
+```bash
+uv run python -m labrag.cli chunks    # inspect chunking only, no embedding, no GPU
+uv run python -m labrag.cli index     # ingest, embed, write .index/
+uv run python -m labrag.cli info      # describe an existing index
+```
+
+`chunks` is there so chunk boundaries can be iterated on without paying for embedding,
+which is the slow part. The index is generated, never committed.
 
 ## Measuring cost per query
 

@@ -1,0 +1,55 @@
+[project]
+name = "labgpt"
+version = "0.2.0"
+description = "A laboratory knowledge assistant over protocols, reagents, safety guidance, team directory, and publications, running a local open-weights model."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+# What you need to build the index and run the assistant. sentence-transformers
+# pulls torch and transformers in anyway, but demo.py imports both directly, so
+# they are declared rather than relied on transitively.
+dependencies = [
+    "numpy>=1.24",
+    "sentence-transformers>=3.0",
+    "transformers>=4.44",
+    "torch>=2.2",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+# Web search and page fetching, used by search/ and by demo.py's search branch.
+search = [
+    "requests>=2.31",
+    "ddgs>=9.0",
+    "beautifulsoup4>=4.12",
+    "readability-lxml>=0.8.1",
+    "lxml>=5.0",
+    "selenium>=4.20",
+    "webdriver-manager>=4.0",
+]
+
+# One-off corpus preparation in buildDB/ and tools/. Not needed to run the assistant.
+ingest = [
+    "pandas>=2.0",
+    "openpyxl>=3.1",      # pandas needs this to read .xlsx
+    "python-docx>=1.1",
+]
+
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Only labrag is a real package. The rest of the repository is scripts run from
+# the repository root (demo.py, buildDB/, tools/, search/), and prompt-engineering/
+# cannot be a package at all because of the hyphen in its name.
+[tool.setuptools]
+packages = ["labrag"]
+py-modules = ["labgpt_config", "labgpt_metrics"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
