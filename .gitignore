@@ -34,3 +34,9 @@ metrics*.jsonl
 
 # Generated retrieval index. Rebuild with: python -m labrag.cli index
 .index/
+
+# Fetched evaluation corpus. Rebuild with tools/fetch_eval_corpus.py
+# Not committed: several sources are CC BY-NC-ND.
+data/eval/*
+!data/eval/manifest.json
+.index-eval/

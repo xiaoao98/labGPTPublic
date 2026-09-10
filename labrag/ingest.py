@@ -25,6 +25,7 @@ as two weak fragments instead of one strong match.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import re
 import sys
@@ -34,17 +35,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import labgpt_config as cfg  # noqa: E402
 
-from .chunker import Chunk, chunk_procedure  # noqa: E402
+from .chunker import Chunk, chunk_procedure, estimate_tokens  # noqa: E402
 from .documents import Document, build_links  # noqa: E402
 
 # Roles carry retrieval signal ("who is the lab manager"), so they stay in the text
 # rather than being pushed into metadata where nothing would index them.
 MEMBER_TEMPLATE = "{name} - {role}\n{bio}"
 
+# An abstract longer than this is not an abstract, it is a proceedings volume.
+MAX_ABSTRACT_TOKENS = 900
+
 
 def _slug(text: str, limit: int = 40) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-    return slug[:limit] or "x"
+    """A readable, collision-free id fragment.
+
+    The hash suffix is not decoration. Truncating to a readable length collides in real
+    corpora: two protocol articles both have a stage headed "Quantification and
+    statistical analysis", and once the trailing article id is cut off by the limit their
+    slugs are identical. Colliding ids silently merge two documents, so the hash of the
+    full text is appended to keep them distinct whatever the truncation does.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:limit].strip("-")
+    digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:6]
+    return f"{slug}-{digest}" if slug else digest
 
 
 def _single(doc: Document, section: str, ordinal: int) -> Chunk:
@@ -179,7 +192,29 @@ def ingest_papers(path=None):
             metadata={"paper_id": paper_id},
         )
         docs.append(doc)
-        chunks.append(_single(doc, section="abstract", ordinal=order))
+        # An abstract is an atomic unit and splitting one produces two weak fragments
+        # instead of one strong match, so it stays whole. The guard is for corpus
+        # accidents: a conference proceedings volume arrives as a single "abstract" of
+        # a hundred thousand characters, and one of those must not become one chunk.
+        if estimate_tokens(abstract) > MAX_ABSTRACT_TOKENS:
+            print(
+                f"  {paper_id}: abstract is {estimate_tokens(abstract):,} tokens, "
+                f"splitting; it is probably a proceedings volume"
+            )
+            chunks.extend(
+                chunk_procedure(
+                    doc_type="paper",
+                    doc_title=title,
+                    text=abstract,
+                    source=f"{path.name}#{paper_id}",
+                    doc_id=doc.doc_id,
+                    target_tokens=300,
+                    metadata={"paper_id": paper_id},
+                    section_prefix="abstract",
+                )
+            )
+        else:
+            chunks.append(_single(doc, section="abstract", ordinal=order))
     return docs, chunks
 
 
@@ -195,16 +230,34 @@ def ingest_paper_sections(path=None):
             body = (entry.get(section) or "").strip()
             if not body or body == "N/A":
                 continue
-            doc = Document(
-                doc_id=f"paper-{paper_id}-{section}",
-                doc_type="paper_section",
-                title=title,
-                text=body,
-                source=f"{path.name}#{paper_id}.{section}",
-                metadata={"paper_id": paper_id, "section": section},
+            doc_id = f"paper-{paper_id}-{section}"
+            source = f"{path.name}#{paper_id}.{section}"
+            docs.append(
+                Document(
+                    doc_id=doc_id,
+                    doc_type="paper_section",
+                    title=title,
+                    text=body,
+                    source=source,
+                    metadata={"paper_id": paper_id, "section": section},
+                )
             )
-            docs.append(doc)
-            chunks.append(_single(doc, section=section, ordinal=order))
+            # Methods and results sections are prose and can run to several thousand
+            # tokens on a real article, so unlike an abstract they have to be split.
+            # chunk_procedure falls back to paragraph packing when it finds no numbered
+            # steps, which is the right behaviour for prose.
+            chunks.extend(
+                chunk_procedure(
+                    doc_type="paper_section",
+                    doc_title=title,
+                    text=body,
+                    source=source,
+                    doc_id=doc_id,
+                    target_tokens=260,
+                    metadata={"paper_id": paper_id, "section": section},
+                    section_prefix=section,
+                )
+            )
             order += 1
     return docs, chunks
 

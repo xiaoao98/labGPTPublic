@@ -210,19 +210,29 @@ def chunk_procedure(
     target_tokens: int = 220,
     overlap_tokens: int = 40,
     metadata: dict[str, Any] | None = None,
+    section_prefix: str = "",
 ) -> list[Chunk]:
-    """Chunk one numbered procedure (a protocol or a reagent list)."""
+    """Chunk one procedure, or any prose that has no numbered steps.
+
+    `section_prefix` names the part of the document a chunk came from, for text where
+    step numbering is not the useful label. A methods section chunks as prose, so
+    step_range gives nothing, and "method" is what belongs in the breadcrumb instead.
+    """
     atoms = split_atoms(text)
     groups = pack_atoms(atoms, target_tokens, overlap_tokens)
     chunks: list[Chunk] = []
     for ordinal, group in enumerate(groups):
+        steps = step_range(group)
+        label = " ".join(part for part in (section_prefix, steps) if part)
+        if section_prefix and len(groups) > 1 and not steps:
+            label = f"{section_prefix} part {ordinal + 1}/{len(groups)}"
         chunks.append(
             Chunk(
                 chunk_id=f"{doc_id}::{ordinal}",
                 doc_id=doc_id,
                 doc_type=doc_type,
                 doc_title=doc_title,
-                section=step_range(group),
+                section=label,
                 text="\n".join(group).strip(),
                 source=source,
                 ordinal=ordinal,

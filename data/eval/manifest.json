@@ -1,0 +1,1300 @@
+{
+  "built_at": "2026-09-10T10:31:55",
+  "source": "PubMed Central Open Access, via the BioC API",
+  "note": "Corpus content is NOT committed. Several sources are CC BY-NC-ND, whose no-derivatives term this reformatting would breach. Rebuild it with tools/fetch_eval_corpus.py; the ids below pin the exact set.",
+  "counts": {
+    "articles": 119,
+    "protocol_articles": 40,
+    "protocol_stages": 239
+  },
+  "licenses": {
+    "author_manuscript": 58,
+    "CC BY-NC-ND": 50,
+    "CC BY": 39,
+    "CC BY-NC": 11,
+    "NO-CC CODE": 1,
+    "TDM": 1
+  },
+  "articles": [
+    {
+      "pmc_id": "6478556",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Detection of Extracellular Vesicles in the Mouse Vaginal Fluid: Their Delivery of Sperm Proteins that stimulate Capacitation and modulate Fertility"
+    },
+    {
+      "pmc_id": "PMC7906940",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Downregulated exosomal microRNA-148b-3p in cancer associated fibroblasts enhance chemosensitivity of bladder cancer cells by downregulating the Wnt/β-catenin pathway and upregulating PTEN"
+    },
+    {
+      "pmc_id": "PMC7581614",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Enhanced immunogenicity of leukemia-derived exosomes via transfection with lentiviral vectors encoding costimulatory molecules"
+    },
+    {
+      "pmc_id": "PMC11896196",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Exosomal microRNA‐19b targets FBXW7 to promote colorectal cancer stem cell stemness and induce resistance to radiotherapy"
+    },
+    {
+      "pmc_id": "PMC11896370",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Exosomal NNMT from peritoneum lavage fluid promotes peritoneal metastasis in gastric cancer"
+    },
+    {
+      "pmc_id": "PMC11896421",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Exosomal CLIC1 released by CLL promotes HUVECs angiogenesis by regulating ITGβ1‐MAPK/ERK axis"
+    },
+    {
+      "pmc_id": "PMC11896352",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Mesenchymal stem cells‐derived exosomes improve pregnancy outcome through inducing maternal tolerance to the allogeneic fetus in abortion‐prone mating mouse"
+    },
+    {
+      "pmc_id": "PMC11915688",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "MiR‐217 is involved in the carcinogenesis of gastric cancer by down‐regulating CDH1 expression"
+    },
+    {
+      "pmc_id": "PMC11932701",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Therapeutic effects of exosomes from angiotensin-converting enzyme 2 - overexpressed endothelial progenitor cells on intracerebral hemorrhagic stroke"
+    },
+    {
+      "pmc_id": "PMC11656527",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Extracellular vesicles as a promising biomarker resource in liquid biopsy for cancer"
+    },
+    {
+      "pmc_id": "PMC11648452",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Assessing extracellular vesicles from bovine mammary gland epithelial cells cultured in FBS-free medium"
+    },
+    {
+      "pmc_id": "PMC11648515",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Identification of important extracellular vesicle RNA molecules related to sperm motility and prostate cancer"
+    },
+    {
+      "pmc_id": "11542171",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Discovery and characterization of a novel HCV inhibitor targeting the late stage of HCV life cycle"
+    },
+    {
+      "pmc_id": "PMC11469210",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Growth Media Conditions Influence the Secretion Route and Release Levels of Engineered Extracellular Vesicles"
+    },
+    {
+      "pmc_id": "PMC11468620",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Enhancing the Stabilization Potential of Lyophilization for Extracellular Vesicles"
+    },
+    {
+      "pmc_id": "PMC11469324",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Encapsulation of Hydrophilic Compounds in Small Extracellular Vesicles: Loading Capacity and Impact on Vesicle Functions"
+    },
+    {
+      "pmc_id": "PMC11060038",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Exendin-4 gene modification and microscaffold encapsulation promote self-persistence and antidiabetic activity of MSCs"
+    },
+    {
+      "pmc_id": "8627532",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Systematic Characterization of Extracellular Glycoproteins using Mass Spectrometry"
+    },
+    {
+      "pmc_id": "10755342",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Stem Cell Derived Extracellular Vesicles for Vascular Elastic Matrix Regenerative Repair"
+    },
+    {
+      "pmc_id": "9005578",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Extracellular Vesicles Improve Diastolic Function and Substructure in Normal and High Fat Diet Models of Chronic Myocardial Ischemia"
+    },
+    {
+      "pmc_id": "10656730",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Tumor necrosis factor receptor-1 is selectively sequestered into Schwann cell extracellular vesicles where it functions as a TNFα decoy"
+    },
+    {
+      "pmc_id": "10653645",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "SMG1 and CDK12 Link ΔNp63α Phosphorylation to RNA Surveillance in Keratinocytes"
+    },
+    {
+      "pmc_id": "PMC9419953",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Behind the Scenes of Extracellular Vesicle Therapy for Skin Injuries and Disorders"
+    },
+    {
+      "pmc_id": "10617683",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Novel loss-of-function variant in DENND5A impedes melanosomal cargo transport and predisposes to familial cutaneous melanoma"
+    },
+    {
+      "pmc_id": "10601455",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "T cell antigenicity and immunogenicity of allogeneic exosomes"
+    },
+    {
+      "pmc_id": "10460254",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Uptake of Fluorescent Labeled Small Extracellular Vesicles In Vitro and in Spinal Cord"
+    },
+    {
+      "pmc_id": "10364325",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Past, Present, and Future of Affinity-based Cell Separation Technologies"
+    },
+    {
+      "pmc_id": "10197761",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Clinical utility of liquid biopsy for the diagnosis and monitoring of EML4-ALK NSCLC patients"
+    },
+    {
+      "pmc_id": "10243643",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Sizing extracellular vesicles using membrane dyes and a single molecule-sensitive flow analyzer"
+    },
+    {
+      "pmc_id": "8642495",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Sunitinib and Axitinib Increase Secretion and Glycolytic Activity of Small Extracellular Vesicles in Renal Cell Carcinoma"
+    },
+    {
+      "pmc_id": "8611101",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "miR-146a dysregulates energy metabolism during neuroinflammation"
+    },
+    {
+      "pmc_id": "8896395",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Exosomes are secreted at similar densities by M21 and PC3 human cancer cells and show paclitaxel solubility"
+    },
+    {
+      "pmc_id": "PMC8899528",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Microglia secrete miR-146a-5p-containing exosomes to regulate neurogenesis in depression"
+    },
+    {
+      "pmc_id": "PMC8848936",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Release of the ribosome biogenesis factor Bud23 from small subunit precursors in yeast"
+    },
+    {
+      "pmc_id": "9400548",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Role of Exosomes in Dermal Wound Healing: A Systematic Review"
+    },
+    {
+      "pmc_id": "8783929",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Extracellular Vesicles as an Emerging Treatment Option for Intervertebral Disc Degeneration: Therapeutic Potential, Translational Pathways, and Regulatory Considerations"
+    },
+    {
+      "pmc_id": "8720116",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Extracellular Vesicles as an Advanced Delivery Biomaterial for Precision Cancer Immunotherapy"
+    },
+    {
+      "pmc_id": "9911311",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Structural characterization of an envelope-associated adeno-associated virus type 2 capsid"
+    },
+    {
+      "pmc_id": "8792290",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Lung Cell Membrane-Coated Nanoparticles Capable of Enhanced Internalization and Translocation in Pulmonary Epithelial Cells"
+    },
+    {
+      "pmc_id": "8813897",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Transcriptomic Taxonomy and Neurogenic Trajectories of Adult Human, Macaque and Pig Hippocampal and Entorhinal Cells"
+    },
+    {
+      "pmc_id": "PMC8821970",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Bone marrow mesenchymal stem cell-derived exosomal miR-34c-5p ameliorates RIF by inhibiting the core fucosylation of multiple proteins"
+    },
+    {
+      "pmc_id": "PMC8821971",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Extracellular vesicles: Major actors of heterogeneity in tau spreading among human tauopathies"
+    },
+    {
+      "pmc_id": "8825682",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Biodistribution of Biomimetic Drug Carriers, Mononuclear Cells and Extracellular Vesicles, in Nonhuman Primates"
+    },
+    {
+      "pmc_id": "PMC8858573",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Restoring Oat Nanoparticles Mediated Brain Memory Function of Mice Fed Alcohol by Sorting Inflammatory Dectin-1 Complex Into Microglial Exosomes"
+    },
+    {
+      "pmc_id": "8795201",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Unannotated small RNA clusters associated with circulating extracellular vesicles detect early stage liver cancer"
+    },
+    {
+      "pmc_id": "9883805",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Exosomal release through TRPML1-mediated lysosomal exocytosis is required for adipogenesis"
+    },
+    {
+      "pmc_id": "8643320",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Acoustofluidic Multimodal Diagnostic System for Alzheimer’s Disease"
+    },
+    {
+      "pmc_id": "PMC9398120",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "A Novel Antagonistic CD73 Antibody for Inhibition of the Immunosuppressive Adenosine Pathway"
+    },
+    {
+      "pmc_id": "8742869",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Marine pollutant exposures and human milk extracellular vesicle-microRNAs in a mother-infant cohort from the Faroe Islands"
+    },
+    {
+      "pmc_id": "8667186",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "A Novel CUL3 Variant causing Familial Hyperkalemic Hypertension Impairs Regulation and Function of Ubiquitin Ligase activity"
+    },
+    {
+      "pmc_id": "8760625",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Extracellular Vesicles in Pharmacology: Novel Approaches in Diagnostics and Therapy"
+    },
+    {
+      "pmc_id": "8702456",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "A soluble PrPC derivative and membrane-anchored PrPC in extracellular vesicles attenuate innate immunity by engaging the NMDA-R/LRP1 receptor complex"
+    },
+    {
+      "pmc_id": "8770579",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Engineered Bacteria Enhance Immunotherapy and Targeted Therapy through Stromal Remodeling of Tumors"
+    },
+    {
+      "pmc_id": "PMC9787580",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Extracellular vesicles from equine mesenchymal stem cells decrease inflammation markers in chondrocytes in vitro"
+    },
+    {
+      "pmc_id": "8665143",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Bovine mammary alveolar MAC-T cells afford a tool for studies of bovine milk exosomes in drug delivery"
+    },
+    {
+      "pmc_id": "PMC9746628",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Mesenchymal stem cells shuttling miR-503 via extracellular vesicles enhance glioma immune escape"
+    },
+    {
+      "pmc_id": "9723538",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Loss of p53 drives neuron reprogramming in head and neck cancer"
+    },
+    {
+      "pmc_id": "PMC9718208",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Evaluating plasma extracellular vesicle microRNAs as possible biomarkers for osteoarthritis"
+    },
+    {
+      "pmc_id": "9719439",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Programmable Extracellular Vesicles for Macromolecule Delivery and Genome Modifications"
+    },
+    {
+      "pmc_id": "8642285",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "tiRNA signaling occurs via stress-regulated vesicle transfer in the hematopoietic niche"
+    },
+    {
+      "pmc_id": "8919377",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Inhibition of neutral sphingomyelinase 2 reduces extracellular vesicle release from neurons, oligodendrocytes, and activated microglial cells following acute brain injury"
+    },
+    {
+      "pmc_id": "8972076",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Effective methods for isolation and purification of extracellular vesicles from plants"
+    },
+    {
+      "pmc_id": "8678320",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Nanoarrays of individual liposomes and bacterial outer membrane vesicles by liftoff nanocontact printing"
+    },
+    {
+      "pmc_id": "8633060",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Placental extracellular vesicles-associated miRNA-519c mediates endotoxin adaptation in pregnancy"
+    },
+    {
+      "pmc_id": "9023614",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Cell–Matrix Interactions Regulate Functional Extracellular Vesicle Secretion from Mesenchymal Stromal Cells"
+    },
+    {
+      "pmc_id": "PMC9139774",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Integrative Modeling and Visualization of Exosomes"
+    },
+    {
+      "pmc_id": "8571020",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Oligodendrocytes Enhance Axonal Energy Metabolism by Deacetylation of Mitochondrial Proteins Through Transcellular Delivery of SIRT2"
+    },
+    {
+      "pmc_id": "9631340",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Neutral Sphingomyelinase 2 Heightens Anti-Melanoma Immune Responses and Anti–PD-1 Therapy Efficacy"
+    },
+    {
+      "pmc_id": "8864770",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Mycosis fungoides-derived exosomes promote cell motility and are enriched with microRNA-155 and microRNA-1246, and their plasma-cell-free expression may serve as a potential biomarker for disease burden"
+    },
+    {
+      "pmc_id": "8410893",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Urine-Derived Extracellular Vesicle miRNAs as Possible Biomarkers for and Mediators of Necrotizing Enterocolitis: A Proof of Concept Study"
+    },
+    {
+      "pmc_id": "8423865",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Neutrophil-derived extracellular vesicles modulate the phenotype of naïve human neutrophils"
+    },
+    {
+      "pmc_id": "8680268",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "A facile magnetic extrusion method for preparing endosome-derived vesicles for cancer drug delivery"
+    },
+    {
+      "pmc_id": "8567535",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Structured elements drive extensive circular RNA translation"
+    },
+    {
+      "pmc_id": "8526414",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Microvesicles Transfer Mitochondria and Increase Mitochondrial Function in Brain Endothelial Cells"
+    },
+    {
+      "pmc_id": "PMC9532455",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Emodin attenuates severe acute pancreatitis-associated acute lung injury by suppressing pancreatic exosome-mediated alveolar macrophage activation"
+    },
+    {
+      "pmc_id": "8506837",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Tumor-derived Exosomes Drive Immunosuppressive Macrophages in a Pre-metastatic Niche through Glycolytic Dominant Metabolic Reprogramming"
+    },
+    {
+      "pmc_id": "8501890",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Expanding the Toolbox of Exosome-Based Modulators of Cell Functions"
+    },
+    {
+      "pmc_id": "8496948",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Column-based Technology for CD9-HPLC Immunoaffinity Isolation of Serum Extracellular Vesicles"
+    },
+    {
+      "pmc_id": "PMC8457000",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Human spliceosomal snRNA sequence variants generate variant spliceosomes"
+    },
+    {
+      "pmc_id": "8324551",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "KRAS-Dependent Cancer Cells Promote Survival by Producing Exosomes Enriched in Survivin"
+    },
+    {
+      "pmc_id": "8528640",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Cannabidiol Loaded Extracellular Vesicles Sensitize Triple-Negative Breast Cancer to Doxorubicin in both in-vitro and in vivo Models"
+    },
+    {
+      "pmc_id": "PMC7822058",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Regional Heritability Mapping Provides Insights into Dry Matter Content in African White and Yellow Cassava Populations"
+    },
+    {
+      "pmc_id": "PMC7685598",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Identification of genes in hepatocellular carcinoma induced by non-alcoholic fatty liver disease"
+    },
+    {
+      "pmc_id": "PMC7306890",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "The interactome of the prostate-specific protein Anoctamin 7"
+    },
+    {
+      "pmc_id": "4992418",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Optimizing Preservation of Extracellular Vesicular miRNAs Derived from Clinical Cerebrospinal Fluid"
+    },
+    {
+      "pmc_id": "PMC8648671",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Beta-Pix-dynamin 2 complex promotes colorectal cancer progression by facilitating membrane dynamics"
+    },
+    {
+      "pmc_id": "PMC8516792",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "RNA sequencing and functional studies of patient-derived cells reveal that neurexin-1 and regulators of this pathway are associated with poor outcomes in Ewing sarcoma"
+    },
+    {
+      "pmc_id": "PMC8090911",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Identification of lysosome‐targeting drugs with anti‐inflammatory activity as potential invasion inhibitors of treatment resistant HER2 positive cancers"
+    },
+    {
+      "pmc_id": "PMC8338861",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Survivin drives tumor-associated macrophage reprogramming: a novel mechanism with potential impact for obesity"
+    },
+    {
+      "pmc_id": "PMC7618368",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "CFTR Protects against Mycobacterium abscessus Infection by Fine-Tuning Host Oxidative Defenses"
+    },
+    {
+      "pmc_id": "10322215",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "CT radiomic features of photodynamic priming in clinical pancreatic adenocarcinoma treatment"
+    },
+    {
+      "pmc_id": "PMC7029314",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Biomarkers Apo10 and TKTL1: Epitope-detection in monocytes (EDIM) as a new diagnostic approach for cholangiocellular, pancreatic and colorectal carcinoma"
+    },
+    {
+      "pmc_id": "PMC8516773",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "YKL-40 protein expression in human tumor samples and human tumor cell line xenografts: implications for its use in tumor models"
+    },
+    {
+      "pmc_id": "PMC8338870",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Complement factor B regulates cellular senescence and is associated with poor prognosis in pancreatic cancer"
+    },
+    {
+      "pmc_id": "PMC7717035",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Macrophage-secreted MMP9 induces mesenchymal transition in pancreatic cancer cells via PAR1 activation"
+    },
+    {
+      "pmc_id": "PMC7214387",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Prevalence of CD8+ cytotoxic lymphocytes in human neoplasms"
+    },
+    {
+      "pmc_id": "PMC4412926",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Anti-tumor activity of the TGF-β receptor kinase inhibitor galunisertib (LY2157299 monohydrate) in patient-derived tumor xenografts"
+    },
+    {
+      "pmc_id": "PMC11916022",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Relationship of mast cell density with lymphangiogenesis and prognostic parameters in breast carcinoma"
+    },
+    {
+      "pmc_id": "PMC11916734",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Proteomic analysis and translational perspective of hepatocellular carcinoma: Identification of diagnostic protein biomarkers by an onco‐proteogenomics approach"
+    },
+    {
+      "pmc_id": "7617079",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Delta-24-RGD, an oncolytic adenovirus, increases survival and promotes proinflammatory immune landscape remodeling in models of AT/RT and CNS-PNET"
+    },
+    {
+      "pmc_id": "7617059",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Cancer-associated fibroblast compositions change with breast-cancer progression linking the ratio of S100A4+ and PDPN+ CAFs to clinical outcome"
+    },
+    {
+      "pmc_id": "PMC7617069",
+      "license": "NO-CC CODE",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "The creatine phosphagen system is mechanoresponsive in pancreatic adenocarcinoma and fuels invasion and metastasis"
+    },
+    {
+      "pmc_id": "PMC11285706",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Angiogenesis Inhibitors in Personalized Combination Regimens for the Treatment of Advanced Refractory Cancers"
+    },
+    {
+      "pmc_id": "PMC11256593",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Chromatin assembly factor 1 suppresses epigenetic reprogramming toward adaptive drug resistance"
+    },
+    {
+      "pmc_id": "PMC7619213",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Dimensionality changes actin network through lamin A/C and zyxin"
+    },
+    {
+      "pmc_id": "PMC7458516",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Expression of FOXM1 and Aurora-A predicts prognosis and sorafenib efficacy in patients with hepatocellular carcinoma"
+    },
+    {
+      "pmc_id": "PMC6398553",
+      "license": "CC BY-NC",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "21 may be a potential marker for cancer stem cell in laryngeal squamous cell carcinoma"
+    },
+    {
+      "pmc_id": "PMC8881269",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Loss of USP28 and SPINT2 expression promotes cancer cell survival after whole genome doubling"
+    },
+    {
+      "pmc_id": "PMC8648692",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Atypical cyclin P regulates cancer cell stemness through activation of the WNT pathway"
+    },
+    {
+      "pmc_id": "PMC8338827",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "MT1JP-mediated miR-24-3p/BCL2L2 axis promotes Lenvatinib resistance in hepatocellular carcinoma cells by inhibiting apoptosis"
+    },
+    {
+      "pmc_id": "PMC7907049",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Effects of FGFR inhibitors TKI258, BGJ398 and AZD4547 on breast cancer cells in 2D, 3D and tissue explant cultures"
+    },
+    {
+      "pmc_id": "PMC7906944",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Raloxifene inhibits pancreatic adenocarcinoma growth by interfering with ERβ and IL-6/gp130/STAT3 signaling"
+    },
+    {
+      "pmc_id": "PMC7581583",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Pure high-grade papillary urothelial bladder cancer: a luminal-like subgroup with potential for targeted therapy"
+    },
+    {
+      "pmc_id": "unknown",
+      "license": "TDM",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "IL-6 stimulation of DNA replication is JAK1/2 mediated in cross-talk with hyperactivated ERK1/2 signaling"
+    },
+    {
+      "pmc_id": "6928436",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Novel protein and immune response markers of human serous tubal intraepithelial carcinoma of the ovary"
+    },
+    {
+      "pmc_id": "PMC7716908",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Co-expression analysis of pancreatic cancer proteome reveals biology and prognostic biomarkers"
+    },
+    {
+      "pmc_id": "PMC7617122",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "The Balance of Stromal BMP Signaling Mediated by GREM1 and ISLR Drives Colorectal Carcinogenesis"
+    },
+    {
+      "pmc_id": "7616973",
+      "license": "author_manuscript",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Chromosome 12p amplification in triple-negative/BRCA1-mutated breast cancer associates with emergence of docetaxel resistance and carboplatin sensitivity"
+    },
+    {
+      "pmc_id": "PMC11623973",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Oncostatin M expression and TP53 mutation status regulate tumor-infiltration of immune cells and survival outcomes in cholangiocarcinoma"
+    }
+  ],
+  "protocols": [
+    {
+      "pmc_id": "PMC8551229",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Processing human lymph node samples for single-cell assays"
+    },
+    {
+      "pmc_id": "PMC8449126",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Extracellular vesicle separation from milk and infant milk formula using acid precipitation and ultracentrifugation"
+    },
+    {
+      "pmc_id": "PMC8387810",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Protocol for assessing real-time changes in mitochondrial morphology, fission and fusion events in live cells using confocal microscopy"
+    },
+    {
+      "pmc_id": "PMC8390363",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Application of pseudotyped virus particles to monitor Ebola virus and SARS-CoV-2 viral entry in human cell lines"
+    },
+    {
+      "pmc_id": "PMC8379651",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Visualizing murine breast and melanoma tumor microenvironment using intravital multiphoton microscopy"
+    },
+    {
+      "pmc_id": "PMC8243151",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Ultracentrifugal separation, characterization, and functional study of extracellular vesicles derived from serum-free cell culture"
+    },
+    {
+      "pmc_id": "PMC7988235",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "In vitro and ex vivo evaluation of tumor-derived exosome-induced dendritic cell dysfunction in mouse"
+    },
+    {
+      "pmc_id": "PMC7988237",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Extracellular vesicle and particle isolation from human and murine cell lines, tissues, and bodily fluids"
+    },
+    {
+      "pmc_id": "PMC7876612",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Protocol to prepare functional cellular nanovesicles with PD1 and TRAIL to boost antitumor response"
+    },
+    {
+      "pmc_id": "PMC7848770",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Protocol for the separation of extracellular vesicles by ultracentrifugation from in vitro cell culture models"
+    },
+    {
+      "pmc_id": "PMC7829267",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Isolation and characterization of extracellular vesicles produced by cell lines"
+    },
+    {
+      "pmc_id": "PMC7811054",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Isolation of exophers from cardiomyocyte-reporter mouse strains by fluorescence-activated cell sorting"
+    },
+    {
+      "pmc_id": "PMC7580105",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Preparation of Multi-omics Grade Extracellular Vesicles by Density-Based Fractionation of Urine"
+    },
+    {
+      "pmc_id": "PMC8724924",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "FACS and immunomagnetic isolation of early erythroid progenitor cells from mouse fetal liver"
+    },
+    {
+      "pmc_id": "PMC8728529",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "GST-Perfringolysin O production for the localization and quantification of membrane cholesterol in human and mouse brain and liver"
+    },
+    {
+      "pmc_id": "PMC8717591",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "CRISPR-Cas12a ribonucleoprotein-mediated gene editing in the plant pathogenic fungus Magnaporthe oryzae"
+    },
+    {
+      "pmc_id": "PMC8718722",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Analyzing mouse neural stem cell and progenitor cell proliferation using EdU incorporation and multicolor flow cytometry"
+    },
+    {
+      "pmc_id": "PMC8715330",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Quantifying phosphorylation dynamics in primary neuronal cultures using LC-MS/MS"
+    },
+    {
+      "pmc_id": "PMC8715323",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Optimized protocols for efficient gene editing in mouse hepatocytes in vivo using CRISPR-Cas9 technology"
+    },
+    {
+      "pmc_id": "PMC8715332",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Protocol for evaluation and validation of TLR8 antagonists in HEK-Blue cells via secreted embryonic alkaline phosphatase assay"
+    },
+    {
+      "pmc_id": "PMC8715327",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Studying macrophage activation in immune-privileged lens through CSF-1 protein intravitreal injection in mouse model"
+    },
+    {
+      "pmc_id": "PMC8715325",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Optimized CRISPR-RfxCas13d system for RNA targeting in zebrafish embryos"
+    },
+    {
+      "pmc_id": "PMC8715324",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Protocol for in utero injection to investigate Zika virus-related fetal microcephaly in mice"
+    },
+    {
+      "pmc_id": "PMC8715211",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Rational engineering enables co-crystallization and structural determination of the HIV-1 matrix-tRNA complex"
+    },
+    {
+      "pmc_id": "PMC8715218",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Quantitative 3D analysis and visualization of cardiac fibrosis by microcomputed tomography"
+    },
+    {
+      "pmc_id": "PMC8715207",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "High-throughput screening for agonists of ROS production in live human vascular endothelial cells"
+    },
+    {
+      "pmc_id": "PMC8693275",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Expression of microbial rhodopsins in Escherichia coli and their extraction and purification using styrene-maleic acid copolymers"
+    },
+    {
+      "pmc_id": "PMC8689364",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Flow cytometry analysis of the subpopulations of mouse keratinocytes and skin immune cells"
+    },
+    {
+      "pmc_id": "PMC8689363",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Intestinal organoid co-culture protocol to study cell competition in vitro"
+    },
+    {
+      "pmc_id": "PMC8689346",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Protocol for synthesis and characterization of ePTFE reinforced, sulfonated polyphenylene in the application to proton exchange membrane fuel cells"
+    },
+    {
+      "pmc_id": "PMC8689348",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Acquisition, processing, and single-cell analysis of normal human breast tissues from a biobank"
+    },
+    {
+      "pmc_id": "PMC8689352",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Purification and preparation of Rhodobacter sphaeroides reaction centers for photocurrent measurements and atomic force microscopy characterization"
+    },
+    {
+      "pmc_id": "PMC8686060",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "A simple and effective cryopreservation protocol for the industrially important and model organism, Euglena gracilis"
+    },
+    {
+      "pmc_id": "PMC8689350",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Live imaging and quantitation of insect feeding-induced Ca2+ signal using GCaMP3-based system in Nicotiana benthamiana"
+    },
+    {
+      "pmc_id": "PMC8683657",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Polysome profiling followed by quantitative PCR for identifying potential micropeptide encoding long non-coding RNAs in suspension cell lines"
+    },
+    {
+      "pmc_id": "PMC8686073",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Protocol to quantify palmitoylation of cysteines in budding yeast"
+    },
+    {
+      "pmc_id": "PMC8686069",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Protocol for in vitro analysis of pro-inflammatory and metabolic functions of cultured primary murine astrocytes"
+    },
+    {
+      "pmc_id": "PMC8683654",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Orthotopic T-cell receptor replacement in primary human T cells using CRISPR-Cas9-mediated homology-directed repair"
+    },
+    {
+      "pmc_id": "PMC8689349",
+      "license": "CC BY-NC-ND",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Cryo-EM analysis of Ebola virus nucleocapsid-like assembly"
+    },
+    {
+      "pmc_id": "PMC8689351",
+      "license": "CC BY",
+      "doi": "",
+      "journal": "",
+      "year": "",
+      "title": "Time-lapse imaging of Drosophila testis for monitoring actin dynamics and sperm release"
+    }
+  ],
+  "excluded": [
+    {
+      "pmc_id": "PMC11648469",
+      "reason": "conference proceedings volume, 94,738-char ABSTRACT"
+    }
+  ]
+}
