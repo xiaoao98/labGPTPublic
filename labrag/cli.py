@@ -20,6 +20,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import labgpt_config as cfg  # noqa: E402
 
+from .answerer import (  # noqa: E402
+    Answerer, ChatClient, DEFAULT_ABSTAIN_COSINE, should_abstain,
+)
 from .chunker import write_chunks  # noqa: E402
 from .documents import write_documents  # noqa: E402
 from .embeddings import DEFAULT_MODEL, Embedder  # noqa: E402
@@ -27,6 +30,7 @@ from .evaluate import (  # noqa: E402
     abstention_separation, aggregate, by_category, check_labels, evaluate, load_questions,
 )
 from .ingest import ingest_all  # noqa: E402
+from .prompts import ABSTENTION_TEMPLATE, build_messages  # noqa: E402
 from .retriever import Retriever  # noqa: E402
 from .store import VectorStore  # noqa: E402
 
@@ -130,6 +134,56 @@ def cmd_search(args) -> int:
             print(f"   matched: {', '.join(retrieved.matched_chunk_ids)}")
         body = doc.text if args.full else doc.text[:280].replace("\n", " ")
         print(f"   {body}{'' if args.full or len(doc.text) <= 280 else ' ...'}")
+    return 0
+
+
+def cmd_ask(args) -> int:
+    store = VectorStore.load(args.index_dir)
+    embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+    retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=args.k)
+
+    result = retriever.retrieve(args.question, k=args.k)
+    abstain, reason = should_abstain(result, args.threshold)
+
+    print(f"\nquestion: {args.question!r}")
+    print(f"best cosine {result.best_cosine:.3f}  threshold {args.threshold:.2f}  "
+          f"-> {'ABSTAIN' if abstain else 'answer'}")
+
+    if abstain:
+        print()
+        print(ABSTENTION_TEMPLATE.format(reason=f"Reason: {reason}."))
+        return 0
+
+    print(f"\n{len(result.documents)} sources retrieved:")
+    for number, item in enumerate(result.documents, start=1):
+        tag = "  [linked]" if item.is_linked else ""
+        print(f"  [S{number}] {item.document.doc_type:<14} {item.document.title[:64]}{tag}")
+
+    if args.dry_run:
+        messages = build_messages(args.question, result.documents)
+        prompt_chars = sum(len(m["content"]) for m in messages)
+        print(f"\n--- assembled prompt, {prompt_chars:,} chars, not sent ---")
+        print(messages[-1]["content"][: args.show])
+        if len(messages[-1]["content"]) > args.show:
+            print(f"\n... {len(messages[-1]['content']) - args.show:,} more chars")
+        return 0
+
+    answerer = Answerer(
+        retriever,
+        client=ChatClient(model=args.model, base_url=args.base_url),
+        k=args.k,
+        abstain_cosine=args.threshold,
+    )
+    answer = answerer.answer(args.question)
+    print(f"\n{answer.text}\n")
+    if answer.citations:
+        print("citations:")
+        for citation in answer.citations:
+            print(f"  {citation}")
+    if answer.invalid_citations:
+        print(f"INVALID citations emitted: {answer.invalid_citations}")
+    if answer.uncited_sentences:
+        print(f"uncited factual sentences: {answer.uncited_sentences}")
     return 0
 
 
@@ -287,6 +341,18 @@ def main(argv=None) -> int:
     p_sweep = sub.add_parser("sweep", help="compare retrieval configurations")
     p_sweep.add_argument("--questions", default=Path(cfg.REPO_ROOT) / "eval" / "questions.yaml")
     p_sweep.set_defaults(func=cmd_sweep)
+
+    p_ask = sub.add_parser("ask", help="retrieve, gate, and answer")
+    p_ask.add_argument("question")
+    p_ask.add_argument("-k", type=int, default=6, help="sources to retrieve")
+    p_ask.add_argument("--threshold", type=float, default=DEFAULT_ABSTAIN_COSINE)
+    p_ask.add_argument("--dry-run", action="store_true",
+                       help="show the assembled prompt instead of calling a model")
+    p_ask.add_argument("--show", type=int, default=2500, help="dry-run print limit")
+    p_ask.add_argument("--model", default="gpt-4o-mini")
+    p_ask.add_argument("--base-url", default=None,
+                       help="OpenAI-compatible endpoint; also LABGPT_LLM_BASE_URL")
+    p_ask.set_defaults(func=cmd_ask)
 
     args = parser.parse_args(argv)
     return args.func(args)

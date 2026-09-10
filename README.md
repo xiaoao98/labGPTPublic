@@ -81,6 +81,9 @@ uv run python -m labrag.cli chunks    # inspect chunking only, no embedding, no 
 uv run python -m labrag.cli index     # ingest, embed, write .index/
 uv run python -m labrag.cli info      # describe an existing index
 uv run python -m labrag.cli search "SMP-17104" --explain   # retrieve, no LLM
+uv run python -m labrag.cli ask "how do I thaw BJ cells" --dry-run  # gate + prompt
+uv run python -m labrag.cli eval --failures    # score against eval/questions.yaml
+uv run python -m labrag.cli sweep             # compare retrieval configurations
 ```
 
 `chunks` is there so chunk boundaries can be iterated on without paying for embedding,
