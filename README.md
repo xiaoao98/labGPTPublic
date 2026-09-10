@@ -80,6 +80,7 @@ The embedding model downloads once, about 130 MB, and then runs offline.
 uv run python -m labrag.cli chunks    # inspect chunking only, no embedding, no GPU
 uv run python -m labrag.cli index     # ingest, embed, write .index/
 uv run python -m labrag.cli info      # describe an existing index
+uv run python -m labrag.cli search "SMP-17104" --explain   # retrieve, no LLM
 ```
 
 `chunks` is there so chunk boundaries can be iterated on without paying for embedding,
