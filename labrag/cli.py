@@ -23,6 +23,9 @@ import labgpt_config as cfg  # noqa: E402
 from .chunker import write_chunks  # noqa: E402
 from .documents import write_documents  # noqa: E402
 from .embeddings import DEFAULT_MODEL, Embedder  # noqa: E402
+from .evaluate import (  # noqa: E402
+    abstention_separation, aggregate, by_category, check_labels, evaluate, load_questions,
+)
 from .ingest import ingest_all  # noqa: E402
 from .retriever import Retriever  # noqa: E402
 from .store import VectorStore  # noqa: E402
@@ -130,6 +133,110 @@ def cmd_search(args) -> int:
     return 0
 
 
+def _fmt(metrics: dict) -> str:
+    return (
+        f"{metrics['n']:>4}{metrics['success@1']:>9.3f}{metrics['success@5']:>9.3f}"
+        f"{metrics['recall@5']:>9.3f}{metrics['recall@10']:>10.3f}"
+        f"{metrics['mrr']:>8.3f}{metrics['ndcg@10']:>9.3f}"
+    )
+
+
+HEADER = f"{'':<22}{'n':>4}{'S@1':>9}{'S@5':>9}{'R@5':>9}{'R@10':>10}{'MRR':>8}{'nDCG10':>9}"
+
+
+def _build(store, mode, args, weight_lexical=1.0):
+    embedder = None
+    if mode in ("dense", "hybrid"):
+        embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+    return Retriever(store, embedder=embedder, mode=mode, final_k=10,
+                     weight_lexical=weight_lexical)
+
+
+def cmd_eval(args) -> int:
+    store = VectorStore.load(args.index_dir)
+    questions = load_questions(args.questions)
+    errors, _ = check_labels(questions, store.documents)
+    if errors:
+        print(f"{len(errors)} label errors; fix these before trusting any number:")
+        for error in errors:
+            print("  ", error)
+        return 1
+    print(f"{len(questions)} questions, {len(store.documents)} documents, "
+          f"{len(store.chunks)} chunks\n")
+
+    results = evaluate(_build(store, args.mode, args), questions)
+    print(HEADER)
+    print("-" * len(HEADER))
+    print(f"{'OVERALL':<22}{_fmt(aggregate(results))}")
+    print()
+    for name, metrics in by_category(results).items():
+        print(f"{name:<22}{_fmt(metrics)}")
+
+    separation = abstention_separation(results)
+    if separation:
+        print("\nabstention signal (best cosine per question):")
+        print(f"  answerable    median {separation['answerable_median']:.3f}  "
+              f"min {separation['answerable_min']:.3f}")
+        print(f"  unanswerable  median {separation['unanswerable_median']:.3f}  "
+              f"max {separation['unanswerable_max']:.3f}")
+        print(f"  distributions overlap: {separation['overlap']}")
+        print(f"  best single threshold {separation['best_threshold']:.3f} "
+              f"-> {separation['best_accuracy']:.1%} correct")
+
+    if args.failures:
+        print("\nquestions where nothing relevant was retrieved at all:")
+        for result in results:
+            if result.question.answerable and result.recall_at_10 == 0.0:
+                print(f"  {result.question.id} [{result.question.category}] "
+                      f"{result.question.question}")
+                print(f"      wanted {result.question.relevant}")
+                print(f"      got    {result.retrieved[:3]}")
+    return 0
+
+
+def cmd_sweep(args) -> int:
+    store = VectorStore.load(args.index_dir)
+    questions = load_questions(args.questions)
+    errors, _ = check_labels(questions, store.documents)
+    if errors:
+        print(f"{len(errors)} label errors; fix these first")
+        for error in errors:
+            print("  ", error)
+        return 1
+
+    configs = [
+        ("dense", "dense", 1.0),
+        ("bm25", "bm25", 1.0),
+        ("hybrid", "hybrid", 1.0),
+        ("hybrid w_lex=0.5", "hybrid", 0.5),
+        ("hybrid w_lex=0.25", "hybrid", 0.25),
+    ]
+    print(f"{len(questions)} questions, {len(store.documents)} documents\n")
+    print(HEADER)
+    print("-" * len(HEADER))
+
+    per_config = {}
+    for label, mode, weight in configs:
+        results = evaluate(_build(store, mode, args, weight_lexical=weight), questions)
+        per_config[label] = results
+        print(f"{label:<22}{_fmt(aggregate(results))}")
+
+    print("\nsuccess@5 by category (any relevant document in the top 5)")
+    categories = sorted({r.question.category for r in next(iter(per_config.values()))
+                         if r.question.answerable})
+    head = f"{'':<22}" + "".join(f"{c[:13]:>15}" for c in categories)
+    print(head)
+    print("-" * len(head))
+    for label, results in per_config.items():
+        cells = by_category(results)
+        row = "".join(
+            f"{cells[c]['success@5']:>15.3f}" if c in cells else f"{'-':>15}"
+            for c in categories
+        )
+        print(f"{label:<22}{row}")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="labrag", description=__doc__)
     parser.add_argument(
@@ -170,6 +277,16 @@ def main(argv=None) -> int:
     p_search.add_argument("--full", action="store_true", help="print whole documents")
     p_search.add_argument("--no-linked", action="store_true", help="skip linked documents")
     p_search.set_defaults(func=cmd_search)
+
+    p_eval = sub.add_parser("eval", help="score retrieval against the labeled question set")
+    p_eval.add_argument("--questions", default=Path(cfg.REPO_ROOT) / "eval" / "questions.yaml")
+    p_eval.add_argument("--mode", default="hybrid", choices=("dense", "bm25", "hybrid"))
+    p_eval.add_argument("--failures", action="store_true", help="list total misses")
+    p_eval.set_defaults(func=cmd_eval)
+
+    p_sweep = sub.add_parser("sweep", help="compare retrieval configurations")
+    p_sweep.add_argument("--questions", default=Path(cfg.REPO_ROOT) / "eval" / "questions.yaml")
+    p_sweep.set_defaults(func=cmd_sweep)
 
     args = parser.parse_args(argv)
     return args.func(args)

@@ -1,0 +1,573 @@
+# Labeled evaluation set for retrieval.
+#
+# Each entry names a question and the document ids that answer it. Labels are doc_ids
+# rather than chunk_ids so that the set survives re-chunking: change the chunk size and
+# the labels stay valid, which is the whole point of being able to sweep configurations.
+#
+# HOW THESE WERE WRITTEN, because it determines what the numbers mean.
+#
+# Questions were written by reading documents sampled from the corpus and asking what a
+# lab member would plausibly want from them, deliberately in the asker's words rather than
+# the document's. That last part matters: reusing a document's own vocabulary manufactures
+# a win for BM25, and heavy paraphrasing manufactures one for dense retrieval. The mix of
+# categories therefore decides the overall score, so the mix is declared up front and
+# every metric is also reported per category. Read the per-category table, not the total.
+#
+#   exact_identifier   a specific value, marker or setting; favours lexical matching
+#   paraphrase         asked in words the document does not use; favours dense retrieval
+#   procedure_detail   a parameter or step inside a protocol; mixed
+#   topic              a broad subject, several documents plausibly relevant
+#   people             the team directory
+#   safety             the safety corpus
+#   cross_document     needs more than one document
+#   unanswerable       nothing in the corpus answers it; the system must abstain
+#
+# LIMITS worth knowing before quoting any of this.
+#
+# The set is one author's judgement of relevance, not multiple annotators with an
+# agreement score. At this size, differences smaller than roughly ten points in recall are
+# not distinguishable from noise. Treat it as enough to choose between configurations that
+# differ substantially, and not enough to tune a threshold to two decimal places.
+#
+# One known corpus inconsistency: safety.json is synthetic and names a laboratory manager
+# who does not appear in members.tsv, which holds real people. No question here depends on
+# reconciling the two.
+
+questions:
+
+  # --- exact_identifier -------------------------------------------------------
+
+  - id: q001
+    category: exact_identifier
+    question: "What IL-2 concentration is used when resting PBMCs overnight?"
+    relevant: [protocol-thawing-and-resting-pbmcs-overnight-pmc8-93187a]
+    note: "50 U/mL IL-2, seeded at 2e6 cells/mL"
+
+  - id: q002
+    category: exact_identifier
+    question: "At what speed and for how long are PBMCs washed after thawing?"
+    relevant: [protocol-thawing-and-resting-pbmcs-overnight-pmc8-93187a]
+    note: "480 x g, 7 min, 20-22 C"
+
+  - id: q003
+    category: exact_identifier
+    question: "What antibody concentration is used to coat plates for T cell activation?"
+    relevant: [protocol-coating-of-plates-with-anti-cd3-cd28-ant-cc9ebd]
+    note: "anti-CD3 and anti-CD28 at 1 ug/mL in sterile PBS"
+
+  - id: q004
+    category: exact_identifier
+    question: "What pressure and temperature does the X-Clarity polymerization step use?"
+    relevant: [protocol-hydrogel-stabilization-of-hearts-pmc8715-4f2981]
+    note: "-90 kPa, 37 C, 3 h"
+
+  - id: q005
+    category: exact_identifier
+    question: "How many HEK-Blue cells are seeded per well in the 96-well plate?"
+    relevant: [protocol-validation-specificity-of-tlr8-antagonis-1ec1ac]
+    note: "7.5e4 cells/well"
+
+  - id: q006
+    category: exact_identifier
+    question: "What is the NaCl concentration in the PBS buffer recipe?"
+    relevant: [protocol-pbs-buffer-pmc7811054-a160a6]
+    note: "137 mM"
+
+  - id: q007
+    category: exact_identifier
+    question: "Which confocal microscope model is used to image the stable cell lines?"
+    relevant: [protocol-characterization-of-stable-cell-lines-pm-4bdb0c]
+    note: "Zeiss LSM780"
+
+  - id: q008
+    category: exact_identifier
+    question: "How much Lipofectamine 3000 goes into the transfection mix?"
+    relevant: [protocol-construction-of-stable-cell-lines-expres-b76572]
+    note: "40 uL Lipo 3000 in Tube A"
+
+  - id: q009
+    category: exact_identifier
+    question: "What temperature are zebrafish embryos kept at after injection?"
+    relevant: [protocol-embryos-care-pmc8715325-21e1c6]
+    note: "28 C in 1% agarose plates with E3 medium"
+
+  - id: q010
+    category: exact_identifier
+    question: "Which biosafety level cabinet is required for the ROS agonist treatment steps?"
+    relevant: [protocol-treat-endothelial-cells-with-test-agonis-3c36e5]
+    note: "BSL-2 safety cabinet, steps 5-8"
+
+  - id: q011
+    category: exact_identifier
+    question: "What is the CD81 finding in the mycosis fungoides exosome study?"
+    relevant: [paper-8864770-abstract]
+    note: "exosomes confirmed by electron microscopy, NanoSight and CD81 staining"
+
+  - id: q012
+    category: exact_identifier
+    question: "Which two microRNAs are enriched in mycosis fungoides derived exosomes?"
+    relevant: [paper-8864770-abstract]
+    note: "microRNA-155 and microRNA-1246"
+
+  # --- paraphrase -------------------------------------------------------------
+
+  - id: q013
+    category: paraphrase
+    question: "How do I get cells out of the freezer and ready to use the next morning?"
+    relevant: [protocol-thawing-and-resting-pbmcs-overnight-pmc8-93187a]
+    note: "thawing and resting PBMCs overnight; question avoids thaw/PBMC vocabulary"
+
+  - id: q014
+    category: paraphrase
+    question: "What do I put on the dish beforehand so the T cells switch on?"
+    relevant: [protocol-coating-of-plates-with-anti-cd3-cd28-ant-cc9ebd]
+    note: "plate coating with anti-CD3/CD28"
+
+  - id: q015
+    category: paraphrase
+    question: "How do I make the fly reproductive organs easier to see while cutting them out?"
+    relevant: [protocol-dissection-of-drosophila-testis-pmc86893-455190]
+    note: "black paper under the dissection cavity, light orthogonal to viewing angle"
+
+  - id: q016
+    category: paraphrase
+    question: "Why should I avoid antibiotics in the medium right after zapping the cells?"
+    relevant: [protocol-preparation-of-electroporation-pmc868365-97c5ac]
+    note: "viability higher in antibiotic-free SC- medium for 12-16 h after electroporation"
+
+  - id: q017
+    category: paraphrase
+    question: "How long does the tissue need to soak before it turns see-through?"
+    relevant: [protocol-hydrogel-stabilization-of-hearts-pmc8715-4f2981]
+    note: "at least 3 days at 4 C for complete hydrogel penetration"
+
+  - id: q018
+    category: paraphrase
+    question: "Which growth medium additive has trouble dissolving unless I acidify it?"
+    relevant: [reagent-protocol-for-the-separation-of-extracell-d6a80b]
+    note: "insulin has low solubility at neutral pH, adjust to pH 3"
+
+  - id: q019
+    category: paraphrase
+    question: "Why can't I just use normal serum when I want to collect vesicles?"
+    relevant: [reagent-protocol-for-the-separation-of-extracell-d6a80b]
+    note: "serum contains EVs which contaminate the preparation; use EV-free serum"
+
+  - id: q020
+    category: paraphrase
+    question: "How long can I keep the fixative once I have made it up?"
+    relevant: [reagent-quantitative-3d-analysis-and-visualizati-c85b72]
+    note: "PFA aliquot and store at -20 C for 6 months, do not refreeze"
+
+  - id: q021
+    category: paraphrase
+    question: "How do I know the cells have actually responded before I move on?"
+    relevant: [protocol-preparation-of-electroporation-pmc868365-97c5ac]
+    note: "cluster formation under an inverse microscope indicates T cell activation"
+
+  - id: q022
+    category: paraphrase
+    question: "What do I do about eggs that never developed?"
+    relevant: [protocol-embryos-care-pmc8715325-21e1c6]
+    note: "remove unfertilized eggs and dead embryos at 2 hpf, repeat at 4 and 6 hpf"
+
+  - id: q023
+    category: paraphrase
+    question: "Can stem cell secretions help repair a weakened blood vessel wall?"
+    relevant: [paper-10755342-abstract]
+    note: "BM-MSC derived EVs for vascular elastic matrix regenerative repair in AAA"
+
+  - id: q024
+    category: paraphrase
+    question: "Is there a way to tell prostate cancer from semen samples?"
+    relevant: [paper-PMC11648515-abstract]
+    note: "seminal plasma EV RNA as biomarkers of prostate cancer"
+
+  - id: q025
+    category: paraphrase
+    question: "Why do melanoma tumours stop responding to targeted drugs over time?"
+    relevant: [paper-PMC11256593-abstract]
+    note: "CAF-1 loss, chromatin accessibility, adaptive BRAF inhibitor resistance"
+
+  - id: q026
+    category: paraphrase
+    question: "Does body fat influence how immune cells behave around a tumour?"
+    relevant: [paper-PMC8338861-abstract]
+    note: "survivin from adipose-derived stem cells reprograms macrophages, obesity"
+
+  # --- procedure_detail -------------------------------------------------------
+
+  - id: q027
+    category: procedure_detail
+    question: "How long before the end of the ultracentrifuge run should the fractionation system be switched on?"
+    relevant: [protocol-polysome-fractionation-pmc8683657-b28d0b]
+    note: "30 min ahead"
+
+  - id: q028
+    category: procedure_detail
+    question: "What has to be pressed first on the fractionation control panel or the computer will not connect?"
+    relevant: [protocol-polysome-fractionation-pmc8683657-b28d0b]
+    note: "press SCAN first"
+
+  - id: q029
+    category: procedure_detail
+    question: "How long is the paraformaldehyde fixation for the confocal dish samples?"
+    relevant: [protocol-characterization-of-stable-cell-lines-pm-4bdb0c]
+    note: "4% PFA for 10-15 min"
+
+  - id: q030
+    category: procedure_detail
+    question: "Which stains are used for the nucleus and the membrane before confocal imaging?"
+    relevant: [protocol-characterization-of-stable-cell-lines-pm-4bdb0c]
+    note: "DAPI for nucleus 10 min, DiO or DiI for membrane 15 min"
+
+  - id: q031
+    category: procedure_detail
+    question: "What confluence should the parent cells reach before transfection?"
+    relevant: [protocol-construction-of-stable-cell-lines-expres-b76572]
+    note: "70-80%"
+
+  - id: q032
+    category: procedure_detail
+    question: "What light cycle and temperature are the seedling plates incubated under?"
+    relevant: [protocol-preparing-living-leaves-and-aphids-for-i-c883cb]
+    note: "24-26 C, 16 h light / 8 h dark, 24 h"
+
+  - id: q033
+    category: procedure_detail
+    question: "How are cells detached from the dish before the TLR selectivity assay?"
+    relevant: [protocol-validation-specificity-of-tlr8-antagonis-1ec1ac]
+    note: "harvested by aspirating, passed through a 10 mL serological pipette 10 times"
+
+  - id: q034
+    category: procedure_detail
+    question: "What dilution of the ROS inhibitor stock is the working concentration?"
+    relevant: [protocol-treat-endothelial-cells-with-test-agonis-3c36e5]
+    note: "500-fold dilution of stock"
+
+  - id: q035
+    category: procedure_detail
+    question: "How long are cells pretreated with the ROS inhibitor before the agonist?"
+    relevant: [protocol-treat-endothelial-cells-with-test-agonis-3c36e5]
+    note: "30 min at 37 C, 5% CO2"
+
+  - id: q036
+    category: procedure_detail
+    question: "When should the eye sample be discarded after intravitreal injection?"
+    relevant: [protocol-assessment-of-fibrosis-following-m-2-act-9c3a01]
+    note: "if leakoma or lens injury is present"
+
+  - id: q037
+    category: procedure_detail
+    question: "What should be done to the forceps between dissections?"
+    relevant: [protocol-dissection-of-drosophila-testis-pmc86893-455190]
+    note: "wipe with lint-free tissue soaked in distilled water before and after"
+
+  - id: q038
+    category: procedure_detail
+    question: "How is the knockdown phenotype confirmed to be on target?"
+    relevant: [protocol-mrna-knockdown-validation-pmc8715325-d1365d]
+    note: "mix of different gRNAs targeting the same mRNA, or independent injections"
+
+  # --- topic ------------------------------------------------------------------
+
+  - id: q039
+    category: topic
+    question: "How are extracellular vesicles separated by ultracentrifugation?"
+    relevant:
+      - protocol-collecting-conditioned-medium-and-cell-l-1fb92e
+      - protocol-exosome-isolation-day-2-pmc7829267-cc887b
+      - protocol-expected-outcomes-pmc7848770-927be2
+      - protocol-expected-outcomes-pmc8243151-d783ce
+      - protocol-generation-of-tde-treated-dcs-ex-vivo-pm-0c12d6
+    note: "derived: documents describing ultracentrifugation of extracellular vesicles (5 documents)"
+
+  - id: q040
+    category: topic
+    question: "What is known about exosomes as a drug delivery vehicle?"
+    relevant:
+      - paper-10322215-abstract
+      - paper-8680268-abstract
+      - paper-8760625-abstract
+      - paper-8792290-abstract
+      - paper-8825682-abstract
+      - paper-8896395-abstract
+      - paper-9719439-abstract
+      - paper-PMC11468620-abstract
+      - paper-PMC11469324-abstract
+      - paper-PMC8648671-abstract
+    note: "derived: paper abstracts describing delivery vehicles (10 documents)"
+
+  - id: q041
+    category: topic
+    question: "How do nanoparticles coated in cell membranes behave in lung tissue?"
+    relevant: [paper-8792290-abstract]
+    note: "cell membrane-coated nanoparticles, pulmonary epithelial"
+
+  - id: q042
+    category: topic
+    question: "What role does chromatin accessibility play in cancer drug resistance?"
+    relevant: [paper-PMC11256593-abstract]
+    note: "CAF-1, H3K9me3, BRAFi resistance"
+
+  - id: q043
+    category: topic
+    question: "How is JAK inhibition related to myeloproliferative neoplasm treatment resistance?"
+    relevant: [paper-unknown-abstract]
+    note: "ruxolitinib, IL-6, ERK1/2 cross-talk"
+
+  - id: q044
+    category: topic
+    question: "What methods exist for making tissue optically transparent for imaging?"
+    relevant:
+      - protocol-hydrogel-stabilization-of-hearts-pmc8715-4f2981
+      - protocol-mitochondrial-volume-quantification-pmc8-960eb6
+    note: "derived: protocols describing tissue clearing (2 documents)"
+
+  # --- people -----------------------------------------------------------------
+
+  - id: q045
+    category: people
+    question: "Who should I ask about ordering reagents?"
+    relevant: [member-michelle-kirtley-948cab]
+    note: "laboratory manager, oversees reagent purchasing"
+
+  - id: q046
+    category: people
+    question: "Who runs the flow cytometry platforms?"
+    relevant: [member-shreyasee-kumbhar-2dd79f]
+    note: "responsible for flow cytometry and imaging platforms"
+
+  - id: q047
+    category: people
+    question: "Who handles IACUC and IRB submissions?"
+    relevant: [member-michelle-kirtley-948cab]
+    note: "laboratory manager"
+
+  - id: q048
+    category: people
+    question: "Who works on computational methods for exosome based cancer diagnosis?"
+    relevant: [member-bingrui-brian-li-d130b5]
+    note: "postdoc, computational algorithms for exosome-based cancer diagnosis"
+
+  - id: q049
+    category: people
+    question: "Who in the lab has a computer vision background?"
+    relevant: [member-jiacheng-ken-sun-d4cd96]
+    note: "AI and computer vision applied to cancer biology"
+
+  - id: q050
+    category: people
+    question: "Who is the principal investigator?"
+    relevant: [member-raghu-kalluri-a5d6bd]
+    note: "PI"
+
+  - id: q051
+    category: people
+    question: "Who studies neuroinflammation and glial biology?"
+    relevant: [member-kaira-a-church-84ec9a]
+    note: "microglia-mediated inflammation, multiple sclerosis, diabetic retinopathy"
+
+  - id: q052
+    category: people
+    question: "Who works on exosomes for treating eye disease?"
+    relevant: [member-zahra-hooda-8915e0]
+    note: "exosomes as therapeutic delivery in diabetic retinopathy and AMD"
+
+  # --- safety -----------------------------------------------------------------
+
+  - id: q053
+    category: safety
+    question: "I just stuck myself with a needle, what do I do?"
+    relevant: [safety-007]
+    note: "needlestick injury procedure"
+
+  - id: q054
+    category: safety
+    question: "Something spilled and it is more than a small amount, who do I call?"
+    relevant: [safety-008]
+    note: "large chemical spill, emergency line"
+
+  - id: q055
+    category: safety
+    question: "What kind of organisms are handled at biosafety level 2?"
+    relevant: [safety-004]
+    note: "BSL-2 agents"
+
+  - id: q056
+    category: safety
+    question: "Can I put a solvent bottle in the normal lab fridge?"
+    relevant: [safety-013]
+    note: "flammables cabinet, not a standard refrigerator"
+
+  - id: q057
+    category: safety
+    question: "What goes into the sharps container?"
+    relevant: [safety-000]
+    note: "razors, needles, scalpel blades, scissors"
+
+  - id: q058
+    category: safety
+    question: "Do I need to wear anything special over my clothes in the lab?"
+    relevant: [safety-010]
+    note: "PPE: buttoned lab coat, safety glasses, closed-toe shoes, gloves"
+
+  # --- cross_document ---------------------------------------------------------
+
+  - id: q059
+    category: cross_document
+    question: "Which protocols involve staining with DAPI?"
+    relevant:
+      - protocol-assessment-of-the-distribution-of-variou-108d51
+      - protocol-cell-surface-staining-pmc8718722-f547b6
+      - protocol-characterization-of-stable-cell-lines-pm-4bdb0c
+      - protocol-flow-cytometry-analysis-pmc8718722-028d5c
+      - protocol-generation-of-tde-treated-dcs-ex-vivo-pm-0c12d6
+      - protocol-generation-of-tde-treated-dcs-in-vitro-p-09bfe0
+      - protocol-isolation-cd8-t-cells-and-cfse-labeling-c1a28c
+      - protocol-oxygen-consumption-analysis-pmc8686069-4737be
+      - protocol-protocol-4-co-culture-flow-cytometry-and-f8d16a
+    note: "derived: every protocol or reagent document mentioning DAPI (9 documents)"
+
+  - id: q060
+    category: cross_document
+    question: "Which procedures require working inside a biosafety cabinet?"
+    relevant:
+      - protocol-capturing-fluorescence-images-with-cq1-p-6a47a5
+      - protocol-cell-harvesting-pmc8686060-825c6d
+      - protocol-day-1-preparation-of-freestyletm-293-f-c-e3962a
+      - protocol-day-3-transfection-of-freestyletm-293-f-206f08
+      - protocol-e-gracilis-growth-pmc8686060-49783f
+      - protocol-isolation-of-evps-from-tissue-samples-pm-f9ba64
+      - protocol-prepare-cultured-vascular-endothelial-ce-79de26
+      - protocol-quick-fungal-dna-extraction-for-genotypi-ca2948
+      - protocol-serum-starve-cells-day-1-pmc7829267-fcd4eb
+      - protocol-thawing-and-recovery-of-e-gracilis-cells-9991db
+      - protocol-treat-endothelial-cells-with-test-agonis-3c36e5
+      - reagent-preparation-of-multi-omics-grade-extrace-647192
+    note: "derived: documents naming a biosafety or laminar flow cabinet (12 documents)"
+
+  - id: q061
+    category: cross_document
+    question: "Which steps in these protocols use centrifugation at 300 x g?"
+    relevant:
+      - protocol-cell-surface-staining-pmc8718722-f547b6
+      - protocol-characterization-of-stable-cell-lines-pm-4bdb0c
+      - protocol-culture-of-astrocytes-pmc8686069-4d4e2e
+      - protocol-obtain-a-cell-suspension-enriched-in-car-ef2257
+      - protocol-seap-reporter-assay-pmc8715332-cb13f7
+      - protocol-validation-specificity-of-tlr8-antagonis-1ec1ac
+      - protocol-wst-1-cell-proliferation-assay-pmc871533-9fa905
+    note: "derived: every document specifying 300 x g centrifugation (7 documents)"
+
+  - id: q062
+    category: cross_document
+    question: "What protocols exist for working with T cells?"
+    relevant:
+      - protocol-thawing-and-resting-pbmcs-overnight-pmc8-93187a
+      - protocol-coating-of-plates-with-anti-cd3-cd28-ant-cc9ebd
+      - protocol-preparation-of-electroporation-pmc868365-97c5ac
+      - protocol-t-cell-activation-pmc8683654-eaff7f
+    note: "several stages of the same TCR replacement protocol article"
+
+  # --- unanswerable -----------------------------------------------------------
+  # The corpus contains nothing that answers these. A correct system abstains.
+  # They are the only way to measure whether the confidence signal is usable, and
+  # several are deliberately close to the corpus in vocabulary so that a naive
+  # threshold on similarity fails them.
+
+  - id: u001
+    category: unanswerable
+    question: "What is the wifi password for the building?"
+    should_abstain: true
+    relevant: []
+
+  - id: u002
+    category: unanswerable
+    question: "How do I request annual leave?"
+    should_abstain: true
+    relevant: []
+
+  - id: u003
+    category: unanswerable
+    question: "What is the current price of a 500 mL bottle of fetal bovine serum?"
+    should_abstain: true
+    relevant: []
+    note: "reagent vocabulary, no pricing anywhere in the corpus"
+
+  - id: u004
+    category: unanswerable
+    question: "Which freezer shelf is the CRISPR plasmid stock on?"
+    should_abstain: true
+    relevant: []
+    note: "plausible lab question, no inventory in the corpus"
+
+  - id: u005
+    category: unanswerable
+    question: "What centrifuge speed should I use to pellet mitochondria from liver tissue?"
+    should_abstain: true
+    relevant: []
+    note: "deliberately close vocabulary; the corpus has centrifugation but not this"
+
+  - id: u006
+    category: unanswerable
+    question: "Who won the lab bake-off last year?"
+    should_abstain: true
+    relevant: []
+
+  - id: u007
+    category: unanswerable
+    question: "What is the phone number for the building maintenance team?"
+    should_abstain: true
+    relevant: []
+    note: "the synthetic safety corpus has other numbers but not this one"
+
+  - id: u008
+    category: unanswerable
+    question: "How do I calibrate the mass spectrometer?"
+    should_abstain: true
+    relevant: []
+    note: "instrument the corpus never covers"
+
+  - id: u009
+    category: unanswerable
+    question: "What is the lab's policy on remote working?"
+    should_abstain: true
+    relevant: []
+
+  - id: u010
+    category: unanswerable
+    question: "Which cell line should I use for a zebrafish toxicity screen?"
+    should_abstain: true
+    relevant: []
+    note: "mixes two corpus topics into a question neither answers"
+
+  - id: u011
+    category: unanswerable
+    question: "How much does a STAR Protocols submission cost?"
+    should_abstain: true
+    relevant: []
+
+  - id: u012
+    category: unanswerable
+    question: "What is the melting point of dry ice?"
+    should_abstain: true
+    relevant: []
+
+  - id: u013
+    category: unanswerable
+    question: "Who do I contact to get a parking permit?"
+    should_abstain: true
+    relevant: []
+
+  - id: u014
+    category: unanswerable
+    question: "What is the expiry date on our current ethanol stock?"
+    should_abstain: true
+    relevant: []
+
+  - id: u015
+    category: unanswerable
+    question: "Which conference is the lab presenting at this year?"
+    should_abstain: true
+    relevant: []
