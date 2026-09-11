@@ -1,54 +1,120 @@
+"""LabGPT chat loop, on retrieval.
+
+WHAT CHANGED, and why the shape of this file is so much smaller than it was.
+
+It used to classify a query three ways and then paste whole corpora into the prompt:
+
+    3 classifier calls, each budgeted 32768 tokens of generation for a one-word answer
+      safety   -> the entire safety corpus
+      protocol -> an LLM picks an experiment name from a list, SQL fetches that one row
+      papers   -> the entire abstract index, and an LLM returns five ids from it
+      members  -> the entire directory, on every query, unconditionally
+    -> one very large prompt -> generate
+
+On the real corpus a paper question assembled tens of thousands of tokens before
+generation started, and none of it could be measured: nothing in the pipeline produced a
+relevance score, so there was no way to say whether a retrieved document was any good and
+no way to refuse when none of them were.
+
+Now:
+
+    1 classifier call, only to decide whether to search the web, which is a real
+      external call worth gating
+    hybrid retrieval over one index -> top k documents
+    abstention gate on the retrieval score, before a token is spent
+    generate with numbered sources and required citations
+    citation validation, and withhold the answer if none resolve
+
+Two behaviours are deliberately preserved. The web search leg is untouched. And the
+directory still contributes, because the original prompt asked the assistant to name
+someone who can help; instead of pasting all of it, the top matching people are retrieved
+alongside, which keeps the behaviour at a fraction of the tokens.
+
+The old per-domain scripts still work on their own: protocolDemo.py, safetyDemo.py,
+memberInfoDemo.py, paperDemo.py. They are unchanged and still stuff their own corpus.
+"""
+
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
 import os
-from protocolDemo import read_protocol_by_experiment, read_reagent_by_experiment
-from safetyDemo import load_safety_content
-from memberInfoDemo import load_member_info
-from search.getDynamicPage import fetch_all_webpage_content
-from search.duckducksearch import get_useful_link
-from paperDemo import fetch_paper_data
 from rich import print as rprint
-import json
 import labgpt_config as cfg
 import labgpt_metrics as metrics
+
+from labrag.answerer import (
+    DEFAULT_ABSTAIN_COSINE, TransformersChatClient, should_abstain,
+    validate_citations, count_uncited_sentences,
+)
+from labrag.embeddings import Embedder
+from labrag.prompts import ABSTENTION_TEMPLATE, build_messages
+from labrag.retriever import Retriever
+from labrag.store import VectorStore
 
 model_name = cfg.MODEL_NAME
 
 # Generation caps. Every one of these was 32768 or 65536, for answers measured in words.
-# The cap is what the caller can actually use, plus headroom.
 MAX_NEW_TOKENS_YESNO = 8      # "yes" / "no"
-MAX_NEW_TOKENS_CLASSIFY = 32  # "safety, experiment reagent and protocol" is ~12 tokens
-MAX_NEW_TOKENS_IDS = 2048     # thinking budget plus "1, 5, 12, 22, 30"
-MAX_NEW_TOKENS_ANSWER = 4096  # the user-facing answer
-ifSearchContent = "Search is NEEDED (true) for: 1. Real-time information: Weather, stock prices, traffic, sports scores. 2. Recent events: Anything that happened after your late 2023 knowledge cutoff. 3. Specific people or entities: Questions about non-famous individuals or specific company news. 4. Niche or local information: Store hours, specific product recommendations, local regulations." + '\n'
-ifSearchContent += "Does this query need to do the web search (Answer can only be one word: yes or no):  "
-classifyContent = "You are a lab assistant AI, respond with the category name (safety, experiment reagent and protocol) for all the information you need to answer this question. If it contain several categories, respond them all split by comma. If it does not need any of them, respond with general. **Question**: "
-ifSearchPapersContent = """
-    You are a query classifier for a specialized biology and cancer research paper database.
-    
-    Your task is to determine if the user's input requires retrieving specific scientific literature or data.
+MAX_NEW_TOKENS_ANSWER = 1024  # the user-facing answer
 
-    Criteria to output "yes":
-    - The user asks about specific cancer types or genes (e.g., TP53, KRAS), or drug mechanisms.
-    - The user asks for citations, papers, or recent studies.
-    - The user asks for statistical data or experimental results.
+# How many documents go into the prompt, and how many of them may be people. The
+# directory is retrieved separately so that a protocol question cannot crowd out the
+# "who can help" behaviour the original prompt asked for, and a people question cannot
+# fill every slot with colleagues.
+TOP_K = 6
+TOP_K_MEMBERS = 2
 
-    Criteria to output "no":
-    - The user asks for coding help, creative writing, or general conversation.
-    - The user asks a question unrelated to biology or cancer.
+# A retrieved person is only appended above this cosine. Filtering to the directory means
+# the search always returns somebody, so without a floor a question about freezing medium
+# gets two arbitrary postdocs attached and the model, told to name who can help, names
+# them.
+#
+# Measured on the top members retrieved, before and after bios were chunked by sentence:
+#
+#                                                      whole bio   chunked
+#   "who runs the flow cytometry platforms"  Shreyasee     0.566     0.662  right
+#   "who should I ask about ordering reagents" Michelle    0.516     0.543  right
+#   "  (the same query)"                       Aman        0.557     0.564  wrong
+#   "what freezing medium is used for BJ cells" anyone     0.538     0.602  wrong
+#
+# Chunking lifted every member score, signal and noise alike, so the floor had to rise
+# with it; at 0.55 it now admits everybody. At 0.62 it keeps Shreyasee, drops the
+# freezing-medium case, and on the reagents question admits nobody rather than the wrong
+# person, which is the better of the two outcomes available.
+#
+# It is still not a relevance test. On that reagents question the correct person scores
+# below an incorrect one on cosine, so the floor cannot separate them; only the fused
+# ranking gets Michelle to the top, and that is because BM25 matches "reagents" in her
+# bio. This rejects the obviously unrelated and does no more.
+MEMBER_FLOOR = DEFAULT_ABSTAIN_COSINE
 
-    IMPORTANT: You must respond with ONLY the word "yes" or "no". Do not provide punctuation or explanations.
-    """
-ifSearchPapersContent += "Does this query need to retrieve specific scientific literature or data from the biology and cancer research paper database (Answer can only be one word: yes or no):  "
-database_path = cfg.DATABASE_PATH
-paper_json_path = cfg.PAPER_CONTENT_PATH
+INDEX_DIR = os.environ.get("LABGPT_INDEX_DIR", str(cfg.REPO_ROOT / ".index"))
+
+ifSearchContent = (
+    "Search is NEEDED (true) for: 1. Real-time information: Weather, stock prices, "
+    "traffic, sports scores. 2. Recent events: Anything that happened after your "
+    "knowledge cutoff. 3. Specific people or entities outside this laboratory. "
+    "4. Niche or local information: Store hours, specific product recommendations, "
+    "local regulations.\n"
+    "Search is NOT needed for anything about this lab's protocols, reagents, safety "
+    "guidance, members or publications, which are answered from local documents.\n"
+    "Does this query need a web search (answer with one word, yes or no): "
+)
 
 
 def run_chat() -> None:
+    try:
+        store = VectorStore.load(INDEX_DIR)
+    except Exception as exc:
+        rprint(f"[red]{exc}[/red]")
+        rprint("Build the index first: [bold]python -m labrag.cli index[/bold]")
+        return
+
+    rprint(f"[dim]index: {len(store.documents)} documents, {len(store.chunks)} chunks[/dim]")
+    embedder = Embedder(store.manifest.get("embedding_model"))
+    retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=TOP_K)
+
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype="auto",
-        device_map="auto"
+        model_name, torch_dtype="auto", device_map="auto"
     )
     if os.name != "nt":
         try:
@@ -56,314 +122,193 @@ def run_chat() -> None:
         except ImportError:
             print("Install `readline` for a better experience.")
 
-    # chat_model = ChatModel()
-    messages = []
-    rprint("[green]Welcome to chat with " + cfg.ASSISTANT_NAME + "![/green]")
-    # print("Cryorecovery, how should I do this experiment?")
+    rprint(f"[green]Welcome to chat with {cfg.ASSISTANT_NAME}![/green]")
 
     while True:
         try:
             query = input("\nUser: ")
         except UnicodeDecodeError:
-            print("Detected decoding error at the inputs, please set the terminal encoding to utf-8.")
+            print("Detected decoding error at the inputs, please set the terminal "
+                  "encoding to utf-8.")
             continue
-        except Exception:
-            raise
-
-        if query.strip() == "exit":
+        except (EOFError, KeyboardInterrupt):
             break
-        # if query.strip() == "clear":
-        #     messages = []
-        #     print("History has been removed.")
-        #     continue
 
-        # messages.append({"role": "user", "content": query})
-        rprint("[green]" + cfg.ASSISTANT_NAME + ": [/green]", end="", flush=True)
-        
-        # for new_text in chat_model.stream_chat(messages):
-        #     print(new_text, end="", flush=True)
-        #     response += new_text
-        # print("database_response: " + database_response)
-        ifSearchQuery = ifSearchContent + query
-        ifSearch = getAnswer(tokenizer, model, ifSearchQuery,
-                             MAX_NEW_TOKENS_YESNO, label="classify:web").lower()
-        # print(ifSearch)
-        ifSearchPaperQuery = ifSearchPapersContent + query
-        ifSearchPaper = getAnswer(tokenizer, model, ifSearchPaperQuery,
-                                  MAX_NEW_TOKENS_YESNO, label="classify:paper").lower()
-        # print("here " + ifSearchPaper)
-        classifyQuery = classifyContent + query
-        dataClassArray = getAnswer(tokenizer, model, classifyQuery,
-                                   MAX_NEW_TOKENS_CLASSIFY, label="classify:domain").split(",")
-        # print(dataClassArray)
-        finalQuery = "You are a lab assistant AI." + '\n'
-        if "safety" in dataClassArray:
-            rprint('\n' + "[blue]Searching safety measurement database: [/blue]")
-            finalQuery += "Read this safety document: " + load_safety_content() + '\n'
-            rprint('\n' + "Done")
-        if "experiment reagent and protocol" in dataClassArray:
-            rprint("[blue]Begin searching protocol database: [/blue]")
-            database_reagent_response = read_reagent_by_experiment(database_path, query, tokenizer, model)
-            database_protocol_response = read_protocol_by_experiment(database_path, query, tokenizer, model)
-            if database_reagent_response != "not found":
-                finalQuery += "Read those reagents documents: " + database_reagent_response + '\n' 
-            if database_protocol_response != "not found":   
-                finalQuery += "Read those protocol documents: " + database_protocol_response + '\n'
-        if "yes" in ifSearch and "experiment reagent and protocol" not in dataClassArray:
-            print()
-            rprint("[blue]Begin searching internet: [/blue]")
-            searchQuery = "There is the information fetched from the internet to answer the question: " + query
-            searchQuery += "Summarize those information fetched from the internet (Try to be precise and contain useful link): "
-            links, snippets = get_useful_link(query)
-            all_page_contents = fetch_all_webpage_content(links)
-            for i, item in enumerate(all_page_contents):
-                    searchQuery += f"\n--- Content from Link {i+1} ---"
-                    searchQuery += f"URL: {item['url']}"
-                    searchQuery += f"Snippet: {snippets[i]}"
-                    searchQuery += f"Content: {item['content']}" 
-                    searchQuery += "-" * 30
-            rprint("[blue]Summary of the search: [/blue]")
-            searchAnswer = stream_and_return_response(tokenizer, model, searchQuery, False) 
-            # print("#########################" + searchAnswer)
-            finalQuery += "Read those information from the website: " + searchAnswer + '\n'
-        if "yes" in ifSearchPaper:
-            rprint("[blue]Begin to search the paper from our lab to fetch related paper: [/blue]")
-            IDs = getIDs(tokenizer, model, query)
-            print(IDs)
-            titles, details = fetch_paper_data(paper_json_path, IDs)
-            print("Related Papers from our lab: "+ '\n')
-            print(titles)
-            # print(IDs)
-            finalQuery += "Read method and results part from those papers: " + details + '\n'
-        # print(finalQuery)
-        finalQuery += "Read this document for our lab members to see if someone can help: " + load_member_info() + '\n'
-        finalQuery += "Now answer this question (if possible always tell who in our lab can help): " + query
-        rprint("[blue]Begin to think before answering the question: [/blue]")
-        print_model_response(tokenizer, model, finalQuery, True)  
-        
+        if query.strip() in ("exit", "quit"):
+            break
+        if not query.strip():
+            continue
+
+        answer_query(query, retriever, tokenizer, model)
 
 
-def getAnswer(tokenizer, model, input_content, max_new_tokens=MAX_NEW_TOKENS_YESNO,
-              label="classify") -> str:
-    """Short, deterministic classification calls.
+def answer_query(query, retriever, tokenizer, model) -> None:
+    rprint(f"[green]{cfg.ASSISTANT_NAME}: [/green]")
 
-    `max_new_tokens` used to be 32768 here, for answers that are a single word. Three of
-    these run before any answering begins, so the budget was 98K tokens of generation to
-    decide routing. The cap now matches what the caller can actually receive; see the
-    MAX_NEW_TOKENS_* constants.
+    # --- retrieve -------------------------------------------------------------
+    result = retriever.retrieve(query, k=TOP_K)
+    # Filtered to the directory, so this always returns somebody: it hands back the two
+    # least-bad people whether or not either is relevant. Asked about freezing medium it
+    # will cheerfully produce two postdocs who have nothing to do with cryopreservation,
+    # and the model, told to name who can help, will name them. Hence the floor below.
+    members = retriever.retrieve(query, k=TOP_K_MEMBERS, doc_types=["member"],
+                                 include_linked=False)
 
-    Sampling is off. Routing decisions should be reproducible, otherwise the same question
-    can take different paths on different runs and the evaluation set means nothing.
-    """
-    messages = [
-        {"role": "user", "content": input_content}
-    ]
+    abstain, reason = should_abstain(result, DEFAULT_ABSTAIN_COSINE)
+    rprint(f"[dim]best match {result.best_cosine:.3f}, "
+           f"{len(result.documents)} documents[/dim]")
 
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=False # Switches between thinking and non-thinking modes. Default is True.
-    )
-    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
-    try:
-        with metrics.timer() as elapsed:
-            generated_ids = model.generate(
-                **model_inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=False
-            )
-        output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
-        metrics.record(
-            label,
-            prompt_tokens=model_inputs.input_ids.shape[1],
-            generated_tokens=len(output_ids),
-            elapsed_s=elapsed[0],
-            cap=max_new_tokens,
-        )
-        content = tokenizer.decode(output_ids, skip_special_tokens=True).strip("\n")
-        return content
-    except Exception as e:
-        print(f"\nError during model generation: {e}")
-        return ""
+    if abstain:
+        # Refusing here costs nothing and is a correct answer for a safety corpus. The
+        # model is never called, so it cannot improvise around the gap.
+        rprint(f"[yellow]{ABSTENTION_TEMPLATE.format(reason=f'Reason: {reason}.')}[/yellow]")
+        return
 
-def getIDs(tokenizer, model, query):
-    json_file_path = cfg.PAPERS_PATH
-    # A missing or malformed corpus file is not recoverable here. The previous version
-    # printed and returned None, which then surfaced as an AttributeError inside
-    # fetch_paper_data three frames later. Fail where the problem is.
-    with open(cfg.require(json_file_path), 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    # Convert the JSON object to a string so the model can read it
-    paperInfoText = json.dumps(data, indent=2)
-    full_instructional_prompt = (
-            "### DATASET\n"
-            f"{paperInfoText}\n\n"
-            "### USER QUERY\n"
-            f"{query}\n\n"
-            "### TASK\n"
-            "Identify the top 5 relevant papers. Provide ONLY their numerical IDs as a comma-separated list.\n"
-            "STRICT RESTRICTIONS:\n"
-            "- No titles.\n"
-            "- No introductory text or conversational filler.\n"
-            "- Output ONLY the numbers (e.g., 1, 5, 12, 22, 30).\n\n"
-            "### RELEVANT IDs:\n"
-        )
-    IDs = get_answers_only_for_thinking(tokenizer, model, full_instructional_prompt)
-    return IDs
+    # --- optional web search --------------------------------------------------
+    sources = list(result.documents)
+    web_summary = None
+    if _needs_web_search(query, tokenizer, model):
+        rprint("[blue]Searching the web ...[/blue]")
+        web_summary = _summarise_web(query, tokenizer, model)
 
-def get_answers_only_for_thinking(tokenizer, model, input_content,
-                                  max_new_tokens=MAX_NEW_TOKENS_IDS,
-                                  label="paper_ids"):
-    """Generate with thinking enabled and return only the post-thinking answer.
+    # The directory is appended rather than competing for the main slots, so that the
+    # "tell them who can help" behaviour survives without paying for the whole of it.
+    # Only people who actually match are appended: a weak match is worse than none,
+    # because the prompt asks the model to name someone and it will name whoever is here.
+    #
+    # The floor is on the cosine, not on Retrieved.score, which is the fused RRF value.
+    # RRF encodes rank rather than similarity, so the top result of a search that matched
+    # nothing still scores highly and a floor on it would never reject anybody.
+    relevant = {
+        hit.chunk.doc_id for hit in members.chunk_hits if hit.confidence >= MEMBER_FLOOR
+    }
+    seen = {item.document.doc_id for item in sources}
+    for item in members.documents:
+        if item.document.doc_id in relevant and item.document.doc_id not in seen:
+            sources.append(item)
 
-    Two changes from the original. The cap was 65536 to produce a comma-separated list of
-    five integers; it is now a budget that covers the reasoning plus the answer.
+    for number, item in enumerate(sources, start=1):
+        rprint(f"[dim]  [S{number}] {item.document.doc_type:<14} "
+               f"{item.document.title[:62]}[/dim]")
 
-    More importantly, this used to return None implicitly whenever "</think>" was absent
-    from the response, which happens whenever the token budget runs out mid-thought. The
-    caller then passed None into fetch_paper_data, which called None.split(',') and
-    crashed. Now a truncated response falls back to the raw text and says so.
-    """
-    messages = [
-        {"role": "user", "content": input_content}
-    ]
-
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=True # Switches between thinking and non-thinking modes. Default is True.
-    )
-    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
-    try:
-        with metrics.timer() as elapsed:
-            generated_ids = model.generate(
-                **model_inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=False
-            )
-
-        new_tokens = generated_ids[0][len(model_inputs.input_ids[0]):]
-        response_text = tokenizer.decode(new_tokens, skip_special_tokens=True)
-
-        metrics.record(
-            label,
-            prompt_tokens=model_inputs.input_ids.shape[1],
-            generated_tokens=len(new_tokens),
-            elapsed_s=elapsed[0],
-            cap=max_new_tokens,
-            truncated="</think>" not in response_text,
+    # --- generate -------------------------------------------------------------
+    messages = build_messages(query, sources)
+    if web_summary:
+        messages[-1]["content"] += (
+            f"\n\nAdditional context from a web search, which is NOT one of the "
+            f"numbered sources and must not be cited as one:\n{web_summary}"
         )
 
-        if "</think>" in response_text:
-            return response_text.split("</think>")[-1].strip()
-
-        # Budget ran out before the model finished thinking. Return what there is rather
-        # than None, so the caller fails on bad content instead of on a NoneType.
-        print(
-            f"\nWarning: generation hit the {max_new_tokens} token cap before finishing. "
-            "Raise max_new_tokens if this recurs."
-        )
-        return response_text.strip()
-    except Exception as e:
-        print(f"\nError during model generation: {e}")
-
-# load the tokenizer and the model
-def print_model_response(tokenizer, model, input_content, ifThinking):
-    messages = [
-        {"role": "user", "content": input_content}
-    ]
-    # question = "I have three types of question: memberinfo, safety, biology experiment protocol. Please answer me the type of the following question (you can only choose one):  What does 2 Gallon sharps containers accepts. The answer should only be the type, no more explanation"
-
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=ifThinking # Switches between thinking and non-thinking modes. Default is True.
-    )
-    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
     streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
-    try:
-        with metrics.timer() as elapsed:
-            generated_ids = model.generate(
-                **model_inputs,
-                streamer=streamer,
-                max_new_tokens=MAX_NEW_TOKENS_ANSWER
-            )
-        # This is the call that carries the assembled prompt, so its prompt_tokens is the
-        # number the retrieval work is trying to bring down.
-        metrics.record(
-            "answer",
-            prompt_tokens=model_inputs.input_ids.shape[1],
-            generated_tokens=len(generated_ids[0]) - model_inputs.input_ids.shape[1],
-            elapsed_s=elapsed[0],
-            cap=MAX_NEW_TOKENS_ANSWER,
-            thinking=bool(ifThinking),
-        )
-    except Exception as e:
-        print(f"\nError during model generation: {e}")
-
-class TextCaptureStreamer(TextStreamer):
-    """A custom streamer that captures the generated text while also printing it."""
-    def __init__(self, tokenizer, **kwargs):
-        super().__init__(tokenizer, **kwargs)
-        self.captured_text = ""
-
-    def on_finalized_text(self, text: str, stream_end: bool = False):
-        # Call the parent's method to print the text to the console
-        super().on_finalized_text(text, stream_end)
-        # Append the text to our internal capture
-        self.captured_text += text
-
-def stream_and_return_response(tokenizer, model, input_content, ifThinking):
-    """
-    Generates a model response, streams it to the console, and returns the full text.
-    """
-    messages = [
-        {"role": "user", "content": input_content}
-    ]
-
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
-        enable_thinking=ifThinking
+    client = TransformersChatClient(
+        tokenizer, model, max_new_tokens=MAX_NEW_TOKENS_ANSWER, streamer=streamer
     )
-    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
-    # Use our custom streamer
-    streamer = TextCaptureStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
+    with metrics.timer() as elapsed:
+        text, usage = client.complete(messages)
+    metrics.record(
+        "answer",
+        prompt_tokens=usage.get("prompt_tokens", 0),
+        generated_tokens=usage.get("completion_tokens", 0),
+        elapsed_s=elapsed[0],
+        sources=len(sources),
+        best_cosine=round(result.best_cosine, 4),
+    )
 
+    # --- validate -------------------------------------------------------------
+    valid, invalid = validate_citations(text, len(sources))
+    if not valid:
+        # An answer with no usable provenance is indistinguishable from a fabrication
+        # here, so it is withheld rather than served.
+        rprint("\n[yellow]That draft carried no citation back to an indexed document, "
+               "so it is being withheld.[/yellow]")
+        rprint(f"[yellow]{ABSTENTION_TEMPLATE.format(reason='Reason: the generated answer cited no valid source.')}[/yellow]")
+        return
+
+    print()
+    rprint("[dim]cited:[/dim]")
+    for number in valid:
+        document = sources[number - 1].document
+        rprint(f"[dim]  [S{number}] {document.title[:64]} ({document.source})[/dim]")
+    if invalid:
+        rprint(f"[red]  invalid citations emitted: {invalid}[/red]")
+    uncited = count_uncited_sentences(text)
+    if uncited:
+        rprint(f"[yellow]  {uncited} factual sentence(s) carried no citation[/yellow]")
+
+
+# --- web search ---------------------------------------------------------------
+
+
+def _needs_web_search(query, tokenizer, model) -> bool:
+    """The one classifier call left. It gates a real external call, so it earns its cost.
+
+    The other two are gone. Retrieval decides what the query is about by scoring the
+    corpus, which is both cheaper and measurable, where the classifiers were neither.
+    """
+    answer = _short_answer(
+        ifSearchContent + query, tokenizer, model,
+        max_new_tokens=MAX_NEW_TOKENS_YESNO, label="classify:web",
+    )
+    return "yes" in answer.lower()
+
+
+def _summarise_web(query, tokenizer, model):
+    # Imported here rather than at module scope so the assistant starts without the
+    # search extra installed. Web search is optional; selenium and a browser driver are
+    # a heavy thing to require of a deployment that only wants to answer from the corpus.
     try:
-        with metrics.timer() as elapsed:
-            generated_ids = model.generate(
-                **model_inputs,
-                streamer=streamer,
-                max_new_tokens=MAX_NEW_TOKENS_ANSWER
-            )
-        metrics.record(
-            "web_summary",
-            prompt_tokens=model_inputs.input_ids.shape[1],
-            generated_tokens=len(generated_ids[0]) - model_inputs.input_ids.shape[1],
-            elapsed_s=elapsed[0],
-            cap=MAX_NEW_TOKENS_ANSWER,
-        )
-    except Exception as e:
-        print(f"\nError during model generation: {e}")
+        from search.duckducksearch import get_useful_link
+        from search.getDynamicPage import fetch_all_webpage_content
+    except ImportError as exc:
+        rprint(f"[yellow]web search unavailable ({exc}); install with "
+               f"uv sync --extra search[/yellow]")
         return None
 
-    # Return the text captured by the streamer
-    return streamer.captured_text
+    try:
+        links, snippets = get_useful_link(query)
+        pages = fetch_all_webpage_content(links)
+    except Exception as exc:
+        rprint(f"[red]web search failed: {exc}[/red]")
+        return None
+    if not pages:
+        return None
 
-# Example usage:
-# input_prompt = "What are the main benefits of using Python for data science?"
-# response = stream_and_return_response(tokenizer, model, input_prompt, ifThinking=False)
-# print("\n--- Function returned: ---")
-# print(response)
+    prompt = (
+        "Summarise the following web results to answer this question. Be precise and "
+        f"keep any useful link.\n\nQuestion: {query}\n"
+    )
+    for index, item in enumerate(pages):
+        snippet = snippets[index] if index < len(snippets) else ""
+        prompt += (f"\n--- result {index + 1} ---\nURL: {item['url']}\n"
+                   f"Snippet: {snippet}\nContent: {item['content']}\n")
+
+    return _short_answer(prompt, tokenizer, model, max_new_tokens=512,
+                         label="web_summary", thinking=False)
+
+
+def _short_answer(prompt, tokenizer, model, max_new_tokens, label, thinking=False) -> str:
+    """One deterministic generation, instrumented. Sampling is off so routing is
+    reproducible; otherwise the same question can take different paths on different runs.
+    """
+    client = TransformersChatClient(
+        tokenizer, model, max_new_tokens=max_new_tokens, thinking=thinking
+    )
+    try:
+        with metrics.timer() as elapsed:
+            text, usage = client.complete([{"role": "user", "content": prompt}])
+    except Exception as exc:
+        print(f"\nError during model generation: {exc}")
+        return ""
+    metrics.record(
+        label,
+        prompt_tokens=usage.get("prompt_tokens", 0),
+        generated_tokens=usage.get("completion_tokens", 0),
+        elapsed_s=elapsed[0],
+        cap=max_new_tokens,
+    )
+    return text
+
 
 if __name__ == "__main__":
     run_chat()
-
-
-
