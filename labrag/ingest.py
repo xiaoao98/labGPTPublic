@@ -9,17 +9,17 @@ documents.py for why those are deliberately different granularities.
 
 Chunk granularity is decided per corpus, and mostly the data decides it:
 
-  members.tsv        one chunk per person   - already the right unit; "who is the safety
-                                              officer" should match one row, not a slice
-                                              through the middle of a table
+  members.tsv        sentence-level split   - searched in pieces, served whole. See
+                                              ingest_members for why this reverses an
+                                              earlier decision to keep bios intact.
   safety.json        one chunk per Q&A      - already atomic
   papers.json        one chunk per abstract - already atomic
   paper_content      one chunk per section  - method and result are separate answers
   protocols.csv      step-aware split       - searched in pieces, served whole
   reagents.csv       step-aware split       - searched in pieces, served whole
 
-Splitting the small corpora further would be a mistake. A member bio cut in half retrieves
-as two weak fragments instead of one strong match.
+Safety entries, abstracts and paper sections stay whole because each is already a single
+answer. Member bios do not: see ingest_members.
 """
 
 from __future__ import annotations
@@ -44,6 +44,10 @@ MEMBER_TEMPLATE = "{name} - {role}\n{bio}"
 
 # An abstract longer than this is not an abstract, it is a proceedings volume.
 MAX_ABSTRACT_TOKENS = 900
+
+# Roughly two sentences of a biography. Small enough that one relevant sentence is not
+# drowned by the rest, large enough that a fragment still reads as a statement.
+MEMBER_CHUNK_TOKENS = 60
 
 
 def _slug(text: str, limit: int = 40) -> str:
@@ -99,7 +103,28 @@ def ingest_members(path=None):
             metadata={"name": name, "role": role},
         )
         docs.append(doc)
-        chunks.append(_single(doc, section=role, ordinal=index))
+        # Bios are chunked, which reverses an earlier decision to keep each one whole.
+        # A bio is around 180 tokens of education, previous posts, current project and
+        # hobbies, and a question like "who runs the flow cytometry platforms" is answered
+        # by one sentence of it. Embedding the whole thing dilutes that sentence into the
+        # rest, and `people` was consequently the worst category for dense retrieval in
+        # every sweep. Each chunk still carries the name and role in its breadcrumb, so a
+        # fragment is never anonymous, and member is an expanding type so the whole bio is
+        # still what gets served.
+        chunks.extend(
+            chunk_procedure(
+                doc_type="member",
+                doc_title=name,
+                text=bio,
+                source=f"{path.name}#{index + 1}",
+                doc_id=doc.doc_id,
+                target_tokens=MEMBER_CHUNK_TOKENS,
+                overlap_tokens=0,
+                hard_max_tokens=MEMBER_CHUNK_TOKENS + 20,
+                metadata={"name": name, "role": role},
+                section_prefix=role,
+            )
+        )
     return docs, chunks
 
 

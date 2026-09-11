@@ -211,6 +211,7 @@ def chunk_procedure(
     overlap_tokens: int = 40,
     metadata: dict[str, Any] | None = None,
     section_prefix: str = "",
+    hard_max_tokens: int = 1050,
 ) -> list[Chunk]:
     """Chunk one procedure, or any prose that has no numbered steps.
 
@@ -219,7 +220,7 @@ def chunk_procedure(
     step_range gives nothing, and "method" is what belongs in the breadcrumb instead.
     """
     atoms = split_atoms(text)
-    groups = pack_atoms(atoms, target_tokens, overlap_tokens)
+    groups = pack_atoms(atoms, target_tokens, overlap_tokens, hard_max_tokens)
     chunks: list[Chunk] = []
     for ordinal, group in enumerate(groups):
         steps = step_range(group)

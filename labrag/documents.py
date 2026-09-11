@@ -15,8 +15,8 @@ So chunks are what get scored, and documents are what get returned. This is the 
 usually called small-to-big, or parent-document retrieval.
 
 Expansion applies only to the doc types where a document is genuinely larger than its
-chunks. Member bios, safety Q&A and paper abstracts are already whole documents, so their
-chunk and document texts are identical and expanding them is a no-op.
+chunks: protocols, reagent lists and member bios. Safety Q&A and paper abstracts are
+already single answers, so their chunk and document texts are identical.
 
 Linking is separate from expansion. A protocol and a reagent list for the same experiment
 are related but not the same document, and in the real corpus their key spaces do not even
@@ -33,7 +33,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
 
 # Doc types where the document is bigger than the chunk and must be served whole.
-EXPANDING_TYPES = frozenset({"protocol", "reagent"})
+EXPANDING_TYPES = frozenset({"protocol", "reagent", "member"})
 
 # Doc types that are linked to each other when they describe the same experiment.
 LINKED_TYPES = (("protocol", "reagent"),)
