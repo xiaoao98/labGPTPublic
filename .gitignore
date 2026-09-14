@@ -32,11 +32,25 @@ Thumbs.db
 *.sqlite3
 metrics*.jsonl
 
-# Generated retrieval index. Rebuild with: python -m labrag.cli index
-.index/
+# Generated retrieval indexes. Rebuild with: python -m labrag.cli --index-dir DIR index
+#
+# Globbed rather than listed. Each index was added by name as it appeared and each time
+# the next one was missed: .index-eval went untracked-by-accident once, and .index-lab
+# sat uncommitted holding 12 MB of a private corpus verbatim. An index is a copy of
+# whatever it was built from, so the default has to be exclusion.
+.index*/
 
 # Fetched evaluation corpus. Rebuild with tools/fetch_eval_corpus.py
 # Not committed: several sources are CC BY-NC-ND.
 data/eval/*
 !data/eval/manifest.json
-.index-eval/
+
+# Private laboratory corpus for the head-to-head comparison against the old system.
+# Real protocols, reagents, members and publications; never committed.
+data/eval_lab/
+
+# The question set built over that corpus. Excluded for the same reason the corpus is:
+# each question carries a note recording the answer it was labeled against, so the file
+# is a few hundred short extracts from the private documents even though it holds none
+# of them whole. eval/questions.yaml stays tracked; its corpus is published protocols.
+eval/questions_lab.yaml
