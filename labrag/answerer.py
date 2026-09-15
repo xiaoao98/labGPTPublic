@@ -55,7 +55,19 @@ from typing import Any
 from .prompts import ABSTENTION_TEMPLATE, build_messages
 
 CITATION_RE = re.compile(r"\[S(\d{1,2})\]")
-SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+# A sentence together with any citation markers trailing it.
+#
+# This was a plain split on "(?<=[.!?])\s+", which is wrong in a way that only showed up
+# the first time a real model generated an answer. The prompt asks for the citation after
+# the sentence it supports, so the text reads "... soap and water. [S2]". Splitting on the
+# punctuation cuts between "water." and "[S2]", handing the marker to the *following*
+# sentence. Every cited answer therefore reported its first sentence as uncited and ended
+# with a bare "[S2]" fragment counted as a sentence of its own. The count came out roughly
+# right by cancellation while the attribution was shifted by one throughout.
+#
+# The lookahead for whitespace or end of string is what keeps "0.22 um" and "100,000 x g"
+# from splitting mid-number: a period only ends a sentence if something blank follows it.
+SENTENCE_RE = re.compile(r"\s*(\S.*?[.!?]+(?:[ \t]*\[S\d{1,2}\])*)(?=\s|$)", re.S)
 
 # Where accuracy peaks on the evaluation set, at 91.1%. Selected on the same questions
 # it is measured on, so treat it as an operating point rather than a validated number.
@@ -134,10 +146,28 @@ def validate_citations(text: str, n_sources: int) -> tuple[list[int], list[int]]
     return sorted(valid), sorted(invalid)
 
 
+def split_sentences(text: str) -> list[str]:
+    """Sentences, each keeping the citation markers that follow it.
+
+    Text after the last sentence-ending punctuation is returned as a final sentence, so a
+    model that stops mid-thought still has its trailing clause examined rather than
+    silently dropped.
+    """
+    sentences: list[str] = []
+    end = 0
+    for match in SENTENCE_RE.finditer(text):
+        sentences.append(match.group(1))
+        end = match.end()
+    remainder = text[end:].strip()
+    if remainder:
+        sentences.append(remainder)
+    return sentences
+
+
 def count_uncited_sentences(text: str) -> int:
     """Factual-looking sentences with no citation. A quality signal, not a gate."""
     count = 0
-    for sentence in SENTENCE_SPLIT_RE.split(text):
+    for sentence in split_sentences(text):
         stripped = sentence.strip()
         if len(stripped.split()) < 5 or stripped.endswith("?"):
             continue
@@ -156,47 +186,150 @@ class LLMError(RuntimeError):
 class ChatClient:
     """Any OpenAI-compatible /v1/chat/completions endpoint.
 
-    One client covers Azure OpenAI, a self-hosted vLLM, Ollama and an internal LiteLLM
-    proxy. For institutional data, point base_url at whichever of those has been approved
-    and nothing leaves that boundary.
+    One client covers the OpenAI API, Azure OpenAI, a self-hosted vLLM, Ollama and an
+    internal LiteLLM proxy. For institutional data, point base_url at whichever of those
+    has been approved and nothing leaves that boundary.
+
+    TWO REQUEST SHAPES.
+
+    The reasoning models are not drop-in compatible with the chat models that came before
+    them, and the differences are rejections rather than warnings. Measured against gpt-5
+    rather than taken from documentation:
+
+        max_tokens        400  "is not supported with this model. Use
+                                'max_completion_tokens' instead"
+        temperature=0.0   400  "does not support 0.0 with this model. Only the default
+                                (1) value is supported"
+
+    So one payload cannot serve both, and the model name alone is not a reliable test: a
+    proxy may rename models and the family keeps growing. The name check picks the likely
+    shape, and a 400 naming one of these parameters corrects it and retries once. The
+    client then remembers, so a batch run pays that cost at most twice.
+
+    TEMPERATURE IS UNAVAILABLE, WHICH MATTERS FOR EVALUATION.
+
+    This client used to send temperature=0.0 for reproducibility. A reasoning model
+    refuses anything but 1, so identical inputs can yield different answers and a rerun
+    will not reproduce exactly. `seed` is accepted and passed when given, but it is
+    documented as best effort, not a guarantee. Any comparison between two systems has to
+    treat the generated half as noisy and say so.
+
+    THE EMPTY ANSWER.
+
+    Reasoning tokens are charged against the same budget as the answer and are spent
+    first. Asking gpt-5 to "Reply with exactly: OK" with a budget of 16 returns HTTP 200,
+    finish_reason "length", and an empty string: all sixteen went to reasoning and none
+    were left to write the reply with. Nothing about that response is an error, so a batch
+    run would record a hundred blank answers and they would read as the model declining to
+    answer. That case is raised here instead. A crash during an evaluation is cheap; a
+    silently empty result set is not.
+
+    reasoning_effort controls the spend. On this workload answers are quoted from supplied
+    sources rather than derived, so the reasoning budget buys little: "minimal", "low" and
+    "medium" all returned the same answer with zero reasoning tokens while "high" spent 64.
+    It defaults to None, meaning the endpoint's own default.
     """
 
+    # Parameters whose rejection says the shape is wrong rather than the value.
+    _SHAPE_PARAMS = frozenset({"max_tokens", "max_completion_tokens", "temperature"})
+
     def __init__(self, model: str = "gpt-4o-mini", base_url: str | None = None,
-                 temperature: float = 0.0, max_tokens: int = 800):
+                 temperature: float = 0.0, max_tokens: int = 800,
+                 reasoning_effort: str | None = None, seed: int | None = None):
         base = (base_url or os.environ.get("LABGPT_LLM_BASE_URL")
                 or "https://api.openai.com/v1").rstrip("/")
         self.url = f"{base}/chat/completions"
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.reasoning_effort = reasoning_effort
+        self.seed = seed
         self._key = (os.environ.get("LABGPT_LLM_API_KEY")
                      or os.environ.get("OPENAI_API_KEY", ""))
+        self._reasoning = self._looks_like_reasoning_model(model)
 
-    def complete(self, messages) -> tuple[str, dict]:
-        payload = json.dumps({
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-        }).encode("utf-8")
+    @staticmethod
+    def _looks_like_reasoning_model(model: str) -> bool:
+        """First guess at the request shape. A wrong guess is corrected on the first 400."""
+        name = model.lower().rsplit("/", 1)[-1]
+        return name.startswith(("gpt-5", "o1", "o3", "o4"))
+
+    def _payload(self, messages) -> dict:
+        body: dict[str, Any] = {"model": self.model, "messages": messages}
+        if self._reasoning:
+            body["max_completion_tokens"] = self.max_tokens
+            # temperature is omitted rather than sent as 1, so that if the shape flips
+            # back the caller's own value is what gets sent.
+            if self.reasoning_effort:
+                body["reasoning_effort"] = self.reasoning_effort
+        else:
+            body["max_tokens"] = self.max_tokens
+            body["temperature"] = self.temperature
+        if self.seed is not None:
+            body["seed"] = self.seed
+        return body
+
+    def _post(self, body: dict) -> dict:
         request = urllib.request.Request(
-            self.url, data=payload,
+            self.url, data=json.dumps(body).encode("utf-8"),
             headers={"Content-Type": "application/json",
                      "Authorization": f"Bearer {self._key}"},
         )
+        with urllib.request.urlopen(request, timeout=180) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    @classmethod
+    def _rejected_shape_param(cls, code: int, detail: str):
+        """The parameter a 400 blamed, when it is one that distinguishes the two shapes."""
+        if code != 400:
+            return None
         try:
-            with urllib.request.urlopen(request, timeout=180) as response:
-                body = json.loads(response.read().decode("utf-8"))
+            param = json.loads(detail).get("error", {}).get("param")
+        except (ValueError, AttributeError):
+            return None
+        return param if param in cls._SHAPE_PARAMS else None
+
+    def complete(self, messages) -> tuple[str, dict]:
+        try:
+            body = self._post(self._payload(messages))
         except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:300]
-            raise LLMError(f"chat endpoint returned {exc.code}: {detail}") from exc
+            detail = exc.read().decode("utf-8", errors="replace")
+            param = self._rejected_shape_param(exc.code, detail)
+            if param is None:
+                raise LLMError(f"chat endpoint returned {exc.code}: {detail[:300]}") from exc
+            # The guess was wrong. Flip it, remember, and try once more.
+            self._reasoning = not self._reasoning
+            try:
+                body = self._post(self._payload(messages))
+            except urllib.error.HTTPError as retry:
+                retry_detail = retry.read().decode("utf-8", errors="replace")[:300]
+                raise LLMError(
+                    f"chat endpoint rejected {param!r}, and the other request shape also "
+                    f"failed with {retry.code}: {retry_detail}"
+                ) from retry
         except urllib.error.URLError as exc:
             raise LLMError(f"could not reach {self.url}: {exc.reason}") from exc
 
         choices = body.get("choices") or []
         if not choices:
             raise LLMError(f"chat endpoint returned no choices: {str(body)[:200]}")
-        return choices[0]["message"]["content"].strip(), body.get("usage", {})
+
+        choice = choices[0]
+        content = (choice.get("message", {}).get("content") or "").strip()
+        if not content:
+            spent = (body.get("usage", {})
+                         .get("completion_tokens_details", {})
+                         .get("reasoning_tokens"))
+            if choice.get("finish_reason") == "length":
+                raise LLMError(
+                    f"the model returned an empty answer: the {self.max_tokens}-token "
+                    f"budget ran out before any reply was written"
+                    + (f", {spent} of it spent on reasoning" if spent else "")
+                    + ". Raise max_tokens, or lower reasoning_effort."
+                )
+            raise LLMError("the model returned an empty answer with finish_reason "
+                           f"{choice.get('finish_reason')!r}")
+        return content, body.get("usage", {})
 
 
 class TransformersChatClient:

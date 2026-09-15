@@ -13,6 +13,7 @@ embedding, which is the slow part. Get the chunk boundaries right first, then in
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -170,7 +171,9 @@ def cmd_ask(args) -> int:
 
     answerer = Answerer(
         retriever,
-        client=ChatClient(model=args.model, base_url=args.base_url),
+        client=ChatClient(model=args.model, base_url=args.base_url,
+                          max_tokens=args.max_tokens,
+                          reasoning_effort=args.reasoning_effort),
         k=args.k,
         abstain_cosine=args.threshold,
     )
@@ -349,9 +352,17 @@ def main(argv=None) -> int:
     p_ask.add_argument("--dry-run", action="store_true",
                        help="show the assembled prompt instead of calling a model")
     p_ask.add_argument("--show", type=int, default=2500, help="dry-run print limit")
-    p_ask.add_argument("--model", default="gpt-4o-mini")
+    p_ask.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini",
+                       help="chat model; also LABGPT_LLM_MODEL")
     p_ask.add_argument("--base-url", default=None,
                        help="OpenAI-compatible endpoint; also LABGPT_LLM_BASE_URL")
+    # Reasoning models spend this budget on thinking before writing anything, so it is
+    # not the answer length. 800 is comfortable for a cited answer at low effort and can
+    # be exhausted entirely by reasoning at high effort.
+    p_ask.add_argument("--max-tokens", type=int, default=800)
+    p_ask.add_argument("--reasoning-effort", default=None,
+                       choices=("minimal", "low", "medium", "high"),
+                       help="reasoning models only; omitted means the endpoint default")
     p_ask.set_defaults(func=cmd_ask)
 
     args = parser.parse_args(argv)
