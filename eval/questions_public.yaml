@@ -505,64 +505,6 @@ questions:
     relevant: [paper-57-abstract]
     note: "Tsp1 deficiency shifts fibroproliferative to inflammatory kidney disease"
 
-  - id: p031
-    category: cross_document
-    question: "Which papers are about KRAS in pancreatic cancer?"
-    relevant:
-      - paper-10-abstract
-      - paper-19-abstract
-      - paper-20-abstract
-      - paper-26-abstract
-      - paper-30-abstract
-      - paper-46-abstract
-      - paper-47-abstract
-      - paper-49-abstract
-      - paper-54-abstract
-      - paper-60-abstract
-      - paper-9-abstract
-    note: "derived: paper abstracts mentioning KRAS or Kras (11 documents)"
-
-  - id: p032
-    category: cross_document
-    question: "Which of the lab's papers involve exosomes?"
-    relevant:
-      - paper-11-abstract
-      - paper-12-abstract
-      - paper-14-abstract
-      - paper-15-abstract
-      - paper-17-abstract
-      - paper-18-abstract
-      - paper-26-abstract
-      - paper-28-abstract
-      - paper-29-abstract
-      - paper-30-abstract
-      - paper-35-abstract
-      - paper-46-abstract
-      - paper-47-abstract
-      - paper-49-abstract
-      - paper-54-abstract
-      - paper-56-abstract
-      - paper-60-abstract
-      - paper-65-abstract
-      - paper-9-abstract
-    note: "derived: paper abstracts mentioning exosomes or extracellular vesicles (19 documents)"
-
-  - id: p033
-    category: cross_document
-    question: "Which papers study type IV collagen?"
-    relevant:
-      - paper-21-abstract
-      - paper-57-abstract
-      - paper-73-abstract
-      - paper-77-abstract
-      - paper-79-abstract
-      - paper-82-abstract
-      - paper-83-abstract
-      - paper-93-abstract
-      - paper-94-abstract
-      - paper-95-abstract
-    note: "derived: paper abstracts mentioning type IV collagen or Col4 (10 documents)"
-
   - id: p034
     category: unanswerable
     question: "What did the lab find about exosomes in Parkinson's disease?"
@@ -598,20 +540,6 @@ questions:
     question: "How many genes came out differentially expressed in the twin-twin transfusion amniotic fluid study?"
     relevant: [paper-11-result]
     note: "62 DEGs, from 27 of 31 sequenced samples surviving quality control; the abstract gives neither count"
-
-  - id: p039
-    category: cross_document
-    question: "Which of the lab's papers use CRISPR?"
-    relevant:
-      - paper-13-method
-      - paper-13-result
-      - paper-26-abstract
-      - paper-26-method
-      - paper-26-result
-      - paper-32-abstract
-      - paper-32-method
-      - paper-32-result
-    note: "derived: every paper or paper section mentioning CRISPR (8 documents across 3 papers). paper-13 mentions it only in the body, so an abstract-only system cannot return it however it is asked"
 
   - id: q089
     category: people
@@ -773,43 +701,6 @@ questions:
     relevant: [reagent-ultracentrifugal-separation-characteriza-4de256]
     note: "ddH2O, for both the 10x PBS and the 5x protein sample buffer"
 
-  - id: r026
-    category: cross_document
-    question: "Which protocols pass something through a 0.22 micron filter?"
-    relevant:
-      - protocol-third-generation-lentivirus-production-a-9587bc
-      - reagent-detection-of-sars-cov-2-spike-protein-bi-1bf4ad
-      - reagent-direct-conversion-of-adult-fibroblasts-i-97cf26
-      - reagent-facs-based-protocol-to-assess-cytotoxici-0b6a6a
-      - reagent-generating-stable-isolated-mitochondrial-a94af1
-      - reagent-global-run-on-sequencing-to-measure-nasc-74916d
-      - reagent-isolation-and-culturing-of-primary-mouse-db32e4
-      - reagent-isolation-and-in-vitro-cultivation-of-ad-b94284
-      - reagent-isolation-of-human-fetal-intestinal-cell-1a1734
-      - reagent-protocol-for-the-separation-of-extracell-d6a80b
-      - reagent-purification-and-cryo-em-structure-deter-3dfdae
-      - reagent-quantitative-3d-analysis-and-visualizati-c85b72
-      - reagent-visualizing-murine-breast-and-melanoma-t-f23b00
-    note: "derived: every protocol or reagent document specifying 0.22 um (13 documents)"
-
-  - id: r027
-    category: cross_document
-    question: "Which steps spin at 300 x g?"
-    relevant:
-      - protocol-assessing-her2-car-expression-by-flow-cy-36dc01
-      - protocol-flow-cytometry-based-her2-car-nk-cell-cy-c8a142
-      - protocol-lentivirus-titration-on-hek293t-cells-pm-c8906e
-      - protocol-part-a-generation-of-3d-mixed-organoids-2eb7f7
-      - protocol-part-b-generation-of-mixed-enteroid-mono-ecd80c
-      - protocol-preparation-of-organoids-pmc8666359-10a0f9
-      - protocol-sampling-from-the-bioreactor-pmc8666714-e1e9c7
-      - protocol-sorting-cells-from-mixed-organoids-pmc86-028a7b
-      - protocol-thawing-and-adherent-pre-culture-of-hpsc-d6a8bd
-      - protocol-third-generation-lentivirus-production-a-9587bc
-      - protocol-transduction-of-expanded-nk-cells-with-h-0ea035
-      - reagent-sucrose-gradient-chromatin-enrichment-fo-176848
-    note: "derived: every document specifying 300 x g (12 documents)"
-
   - id: r028
     category: cross_document
     question: "Which protocols involve liquid nitrogen?"
@@ -834,3 +725,80 @@ questions:
     should_abstain: true
     relevant: []
     note: "no mass spectrometry calibration in the corpus; the question is shaped like the protocols that are in it"
+
+  # --- cross_document at a size the served k can actually satisfy ----------
+  # Replacing three questions whose gold sets ran to 19, 13 and 12 documents. Those
+  # ask for a set, and six slots cannot hold one that size, so no retrieval however
+  # good could score above 6/19 and an oracle run could not either. These three are
+  # still genuinely multi-document, four distinct articles each, but answerable in
+  # full within the six documents the model is given.
+
+  - id: r031
+    category: cross_document
+    question: "Which protocols count cells with a haemocytometer?"
+    relevant:
+      - protocol-cell-culture-and-brdu-treatment-ir-pmc86-926e1c
+      - protocol-electroporation-of-ipscs-by-4d-nucleofec-b287ef
+      - protocol-isolation-of-subclones-of-ipscs-and-geno-f42aeb
+      - protocol-m-oryzae-protoplast-preparation-pmc87175-6b0399
+      - protocol-neural-crest-cell-differentiation-from-h-83fe9a
+    note: "derived: every protocol counting cells on a haemocytometer (5 documents across four articles)"
+
+  - id: q093
+    category: cross_document
+    question: "Who in the lab has worked on diabetes?"
+    relevant:
+      - member-emi-kawakita-7b6221
+      - member-hikaru-sugimoto-962528
+      - member-kaira-a-church-84ec9a
+      - member-zahra-hooda-8915e0
+    note: "derived: every member whose biography mentions diabetes (4 people). Two trained as diabetes specialists before joining and two work on diabetic retinopathy, so the question says worked on rather than researches, which would exclude the training. Member documents are about 60 tokens each and this is the only cross_document question over them, which makes it the hardest of the seven: the people category already scores lowest for the same reason."
+
+  - id: r033
+    category: cross_document
+    question: "Which protocols detach cells with trypsin-EDTA?"
+    relevant:
+      - protocol-cell-culture-and-brdu-treatment-ir-pmc86-926e1c
+      - protocol-flow-cytometry-based-her2-car-nk-cell-cy-c8a142
+      - protocol-lung-metastasis-model-pmc8649400-46df8c
+      - protocol-raw-data-collection-pmc8605398-fe57f1
+      - protocol-third-generation-lentivirus-production-a-9587bc
+    note: "derived: every protocol using trypsin-EDTA to lift cells (5 documents across four articles)"
+
+  # --- cross_document over the publications, at a tractable size -------------
+  # Replacing three that ran to 11, 10 and 8 documents. Topics narrow enough to answer
+  # inside six slots are scarce on the paper side: pericytes, melanoma, checkpoints and
+  # hepatocytes all exceed fifteen documents once the full text is counted. These three
+  # are what the corpus offers below the cap, and each spans four or five papers.
+
+  - id: p040
+    category: cross_document
+    question: "Which of the lab's papers are about endothelial-to-mesenchymal transition?"
+    relevant:
+      - paper-40-abstract
+      - paper-61-abstract
+      - paper-78-abstract
+      - paper-87-abstract
+    note: "derived: every paper or section discussing EndMT (4 documents, four papers, three of which carry it in the title)"
+
+  - id: p041
+    category: cross_document
+    question: "Which of the lab's papers look at hypoxia-inducible factor?"
+    relevant:
+      - paper-67-result
+      - paper-70-abstract
+      - paper-76-abstract
+      - paper-81-abstract
+    note: "derived: every paper or section naming hypoxia-inducible factor (4 documents, four papers). The bare abbreviation HIF-1 is deliberately excluded: it appears in twenty documents, mostly antibody lists in methods sections, where the paper is not about the factor at all."
+
+  - id: p042
+    category: cross_document
+    question: "Which of the lab's papers involve neutrophils?"
+    relevant:
+      - paper-10-result
+      - paper-13-result
+      - paper-25-result
+      - paper-32-abstract
+      - paper-32-result
+      - paper-83-result
+    note: "derived: every paper or section discussing neutrophils (6 documents, five papers), each a substantive mention of recruitment, composition or infiltration"

@@ -30,6 +30,7 @@ from .chunker import write_chunks  # noqa: E402
 from .documents import write_documents  # noqa: E402
 from .embeddings import DEFAULT_MODEL, Embedder  # noqa: E402
 from .evaluate import (  # noqa: E402
+    SERVED_K,
     abstention_separation, aggregate, by_category, check_labels, evaluate, load_questions,
 )
 from .ingest import ingest_all  # noqa: E402
@@ -326,13 +327,16 @@ def cmd_answer_all(args) -> int:
 
 def _fmt(metrics: dict) -> str:
     return (
-        f"{metrics['n']:>4}{metrics['success@1']:>9.3f}{metrics['success@5']:>9.3f}"
-        f"{metrics['recall@5']:>9.3f}{metrics['recall@10']:>10.3f}"
+        f"{metrics['n']:>4}{metrics['success@1']:>9.3f}{metrics['success@6']:>9.3f}"
+        f"{metrics['recall@6']:>9.3f}{metrics['recall@10']:>10.3f}"
         f"{metrics['mrr']:>8.3f}{metrics['ndcg@10']:>9.3f}"
     )
 
 
-HEADER = f"{'':<22}{'n':>4}{'S@1':>9}{'S@5':>9}{'R@5':>9}{'R@10':>10}{'MRR':>8}{'nDCG10':>9}"
+# S@6 and R@6 rather than @5, because six documents are what reach the model and five is
+# a number no part of the system uses. The gap is not cosmetic: on the same run success@5
+# reads 0.926 where success@6 reads 0.951.
+HEADER = f"{'':<22}{'n':>4}{'S@1':>9}{'S@6':>9}{'R@6':>9}{'R@10':>10}{'MRR':>8}{'nDCG10':>9}"
 
 
 def _build(store, mode, args, weight_lexical=1.0):
@@ -412,7 +416,8 @@ def cmd_sweep(args) -> int:
         per_config[label] = results
         print(f"{label:<22}{_fmt(aggregate(results))}")
 
-    print("\nsuccess@5 by category (any relevant document in the top 5)")
+    print(f"\nsuccess@{SERVED_K} by category "
+          f"(any relevant document in the {SERVED_K} served to the model)")
     categories = sorted({r.question.category for r in next(iter(per_config.values()))
                          if r.question.answerable})
     head = f"{'':<22}" + "".join(f"{c[:13]:>15}" for c in categories)
@@ -421,7 +426,7 @@ def cmd_sweep(args) -> int:
     for label, results in per_config.items():
         cells = by_category(results)
         row = "".join(
-            f"{cells[c]['success@5']:>15.3f}" if c in cells else f"{'-':>15}"
+            f"{cells[c]['success@6']:>15.3f}" if c in cells else f"{'-':>15}"
             for c in categories
         )
         print(f"{label:<22}{row}")

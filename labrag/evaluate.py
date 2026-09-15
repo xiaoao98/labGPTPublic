@@ -158,11 +158,20 @@ class QuestionResult:
     recall_at_1: float = 0.0
     recall_at_3: float = 0.0
     recall_at_5: float = 0.0
+    recall_at_6: float = 0.0
     recall_at_10: float = 0.0
     success_at_1: float = 0.0
     success_at_5: float = 0.0
+    success_at_6: float = 0.0
     mrr: float = 0.0
     ndcg_at_10: float = 0.0
+
+
+#: Documents actually handed to the model. Metrics are reported here rather than at a
+#: round number, because this is the only k whose value changes an answer: a document
+#: ranked seventh is not in the prompt and might as well not have been retrieved.
+#: Keep in step with the -k default in the cli and with TOP_K in demo.py.
+SERVED_K = 6
 
 
 def evaluate(retriever, questions: list[Question], k: int = 10) -> list[QuestionResult]:
@@ -179,9 +188,11 @@ def evaluate(retriever, questions: list[Question], k: int = 10) -> list[Question
             result.recall_at_1 = recall_at_k(retrieved, question.relevant, 1)
             result.recall_at_3 = recall_at_k(retrieved, question.relevant, 3)
             result.recall_at_5 = recall_at_k(retrieved, question.relevant, 5)
+            result.recall_at_6 = recall_at_k(retrieved, question.relevant, SERVED_K)
             result.recall_at_10 = recall_at_k(retrieved, question.relevant, 10)
             result.success_at_1 = success_at_k(retrieved, question.relevant, 1)
             result.success_at_5 = success_at_k(retrieved, question.relevant, 5)
+            result.success_at_6 = success_at_k(retrieved, question.relevant, SERVED_K)
             result.mrr = reciprocal_rank(retrieved, question.relevant)
             result.ndcg_at_10 = ndcg_at_k(retrieved, question.relevant, 10)
         results.append(result)
@@ -198,9 +209,11 @@ def aggregate(results: list[QuestionResult]) -> dict:
         "recall@1": sum(r.recall_at_1 for r in answerable) / n,
         "recall@3": sum(r.recall_at_3 for r in answerable) / n,
         "recall@5": sum(r.recall_at_5 for r in answerable) / n,
+        "recall@6": sum(r.recall_at_6 for r in answerable) / n,
         "recall@10": sum(r.recall_at_10 for r in answerable) / n,
         "success@1": sum(r.success_at_1 for r in answerable) / n,
         "success@5": sum(r.success_at_5 for r in answerable) / n,
+        "success@6": sum(r.success_at_6 for r in answerable) / n,
         "mrr": sum(r.mrr for r in answerable) / n,
         "ndcg@10": sum(r.ndcg_at_10 for r in answerable) / n,
     }
