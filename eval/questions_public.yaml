@@ -1,0 +1,595 @@
+# Labeled evaluation set over a corpus with nothing private in it.
+#
+# The seventy-one questions of eval/questions_lab.yaml whose gold documents survive when
+# the lab's protocols and reagents are replaced by public ones. Everything here can be
+# sent to a hosted model, which is the point: the private set cannot, so until this
+# existed the generation half of the pipeline had no question set it was allowed to run
+# on end to end.
+#
+# THE CORPUS
+#
+#   members, safety, publications   the lab's own files, all three public. The member
+#                                   pages are on the lab website, and the 84 papers are
+#                                   published, with their abstracts and their methods and
+#                                   results sections.
+#   protocols, reagents             PubMed Central Open Access, fetched by
+#                                   tools/fetch_eval_corpus.py. 152 protocol stages from
+#                                   21 articles, every one CC BY, and 101 reagent lists.
+#
+# The protocol count is deliberate rather than whatever the fetch returned. An early build
+# had 1232 stages against the lab corpus's 149, which makes retrieval a different and
+# easier problem and the two sets not worth comparing. Whole articles are kept or dropped
+# together, because the stages of one protocol belong together.
+#
+# Not committed, and not reconstructible from this repository alone: the publications are
+# public to read, which is not the same permission as public to redistribute, and the full
+# text belongs to the publishers. Rebuild it from the lab's files plus a corpus fetch.
+#
+# WHAT IS NOT HERE
+#
+# Twenty-nine questions were dropped, all of them labeled against lab protocols or
+# reagents: 11 exact_identifier, 10 procedure_detail, 5 paraphrase and 3 cross_document.
+# That loss is not neutral. exact_identifier is the strongest category on the private
+# corpus, at 0.909 success@5, because a catalog number or a primer name either matches or
+# does not, so removing it leaves a set weighted towards paraphrase and publications and
+# therefore harder. Numbers from this set and from the private one are not comparable by
+# subtraction.
+#
+# The reagent documents here have a different shape from the lab's, which no amount of
+# fetching fixes. The lab keeps a formulation per cell line, so "what freezing medium does
+# A549 use" has an answer; PMC gives a list of reagents per article, so it does not. No
+# question in this set is labeled against a reagent.
+#
+# MEASURED
+#
+# Retrieval: overall success@5 0.870, nDCG@10 0.604 over the 54 answerable questions.
+# Abstention separates at 0.646 for 88.7% on the best single threshold.
+#
+# Generation, gpt-5 at low reasoning effort over the older public set: no invented
+# citation numbers and no uncited answers in 88 replies, which is the one property of the
+# citation gate that could not be checked without a real model.
+#
+# LIMITS. One author's judgement of relevance, no second annotator, no agreement score. At
+# n=54 answerable a difference below roughly ten points is not distinguishable from noise.
+
+questions: whether a label is right does not depend on whether fixing it helps.
+#
+# This is the same mistake the note above already describes, recurring in a category that had
+# not been put through exhaustive derivation. It moved overall success@5 from 0.831 to 0.904.
+# The gap between hybrid retrieval and dense alone widened from 2.4 points to 7.3 once the
+# noise was removed, so the bad labels had been hiding the result, not flattering it.
+#
+# p013 and p019 now carry 15 and 12 documents. Excluding both, the remaining ten paper_topic
+# questions still score 1.000 at success@5, so the category is not resting on them.
+#
+# LIMITS. One author's judgement of relevance, no second annotator, no agreement score. At
+# this size a difference below roughly ten points in recall is not distinguishable from
+# noise. Enough to choose between configurations that differ substantially; not enough to
+# tune a threshold to two decimal places.
+
+questions:
+
+  - id: q045
+    category: people
+    question: "Who should I ask about ordering reagents?"
+    relevant: [member-michelle-kirtley-948cab]
+    note: "laboratory manager, oversees reagent purchasing"
+
+  - id: q046
+    category: people
+    question: "Who runs the flow cytometry platforms?"
+    relevant: [member-shreyasee-kumbhar-2dd79f]
+    note: "responsible for flow cytometry and imaging platforms"
+
+  - id: q047
+    category: people
+    question: "Who handles IACUC and IRB submissions?"
+    relevant: [member-michelle-kirtley-948cab]
+    note: "laboratory manager"
+
+  - id: q048
+    category: people
+    question: "Who works on computational methods for exosome based cancer diagnosis?"
+    relevant: [member-bingrui-brian-li-d130b5]
+    note: "postdoc, computational algorithms for exosome-based cancer diagnosis"
+
+  - id: q049
+    category: people
+    question: "Who in the lab has a computer vision background?"
+    relevant: [member-jiacheng-ken-sun-d4cd96]
+    note: "AI and computer vision applied to cancer biology"
+
+  - id: q050
+    category: people
+    question: "Who is the principal investigator?"
+    relevant: [member-raghu-kalluri-a5d6bd]
+    note: "PI"
+
+  - id: q051
+    category: people
+    question: "Who studies neuroinflammation and glial biology?"
+    relevant: [member-kaira-a-church-84ec9a]
+    note: "microglia-mediated inflammation, multiple sclerosis, diabetic retinopathy"
+
+  - id: q052
+    category: people
+    question: "Who works on exosomes for treating eye disease?"
+    relevant: [member-zahra-hooda-8915e0]
+    note: "exosomes as therapeutic delivery in diabetic retinopathy and AMD"
+
+  - id: q053
+    category: safety
+    question: "I just stuck myself with a needle, what do I do?"
+    relevant: [safety-007]
+    note: "needlestick injury procedure"
+
+  - id: q054
+    category: safety
+    question: "Something spilled and it is more than a small amount, who do I call?"
+    relevant: [safety-008]
+    note: "large chemical spill, emergency line"
+
+  - id: q055
+    category: safety
+    question: "What kind of organisms are handled at biosafety level 2?"
+    relevant: [safety-004]
+    note: "BSL-2 agents"
+
+  - id: q056
+    category: safety
+    question: "Can I put a solvent bottle in the normal lab fridge?"
+    relevant: [safety-013]
+    note: "flammables cabinet, not a standard refrigerator"
+
+  - id: q057
+    category: safety
+    question: "What goes into the sharps container?"
+    relevant: [safety-000]
+    note: "razors, needles, scalpel blades, scissors"
+
+  - id: q058
+    category: safety
+    question: "Do I need to wear anything special over my clothes in the lab?"
+    relevant: [safety-010]
+    note: "PPE: buttoned lab coat, safety glasses, closed-toe shoes, gloves"
+
+  - id: q085
+    category: safety
+    question: "Can I put a capped bottle in the autoclave?"
+    relevant: [safety-012]
+    note: "no; do not autoclave sealed containers, flammable material, or bleach"
+
+  - id: q086
+    category: safety
+    question: "I knocked over a tube of cells on the bench, how do I clean it up?"
+    relevant: [safety-009]
+    note: "small biological spill: cover with absorbent material, disinfect outside inward, biohazard bag"
+
+  - id: u001
+    category: unanswerable
+    question: "What is the wifi password for the building?"
+    should_abstain: true
+    relevant: []
+
+  - id: u002
+    category: unanswerable
+    question: "How do I request annual leave?"
+    should_abstain: true
+    relevant: []
+
+  - id: u003
+    category: unanswerable
+    question: "What is the current price of a 500 mL bottle of fetal bovine serum?"
+    should_abstain: true
+    relevant: []
+    note: "reagent vocabulary, no pricing anywhere in the corpus"
+
+  - id: u004
+    category: unanswerable
+    question: "Which freezer shelf is the CRISPR plasmid stock on?"
+    should_abstain: true
+    relevant: []
+    note: "plausible lab question, no inventory in the corpus"
+
+  - id: u005
+    category: unanswerable
+    question: "What centrifuge speed should I use to pellet mitochondria from liver tissue?"
+    should_abstain: true
+    relevant: []
+    note: "deliberately close vocabulary; the corpus has centrifugation but not this"
+
+  - id: u006
+    category: unanswerable
+    question: "Who won the lab bake-off last year?"
+    should_abstain: true
+    relevant: []
+
+  - id: u007
+    category: unanswerable
+    question: "What is the phone number for the building maintenance team?"
+    should_abstain: true
+    relevant: []
+    note: "the synthetic safety corpus has other numbers but not this one"
+
+  - id: u008
+    category: unanswerable
+    question: "How do I calibrate the mass spectrometer?"
+    should_abstain: true
+    relevant: []
+    note: "instrument the corpus never covers"
+
+  - id: u009
+    category: unanswerable
+    question: "What is the lab's policy on remote working?"
+    should_abstain: true
+    relevant: []
+
+  - id: u010
+    category: unanswerable
+    question: "Which cell line should I use for a zebrafish toxicity screen?"
+    should_abstain: true
+    relevant: []
+    note: "mixes two corpus topics into a question neither answers"
+
+  - id: u011
+    category: unanswerable
+    question: "How much does a STAR Protocols submission cost?"
+    should_abstain: true
+    relevant: []
+
+  - id: u012
+    category: unanswerable
+    question: "What is the melting point of dry ice?"
+    should_abstain: true
+    relevant: []
+
+  - id: u013
+    category: unanswerable
+    question: "Who do I contact to get a parking permit?"
+    should_abstain: true
+    relevant: []
+
+  - id: u014
+    category: unanswerable
+    question: "What is the expiry date on our current ethanol stock?"
+    should_abstain: true
+    relevant: []
+
+  - id: u015
+    category: unanswerable
+    question: "Which conference is the lab presenting at this year?"
+    should_abstain: true
+    relevant: []
+
+  - id: p001
+    category: paper_topic
+    question: "Has the lab taken an exosome therapy into a clinical trial?"
+    relevant: [paper-9-abstract]
+    note: "engineered exosomes with KrasG12D siRNA, phase I study with immunological correlates"
+
+  - id: p002
+    category: paper_detail
+    question: "Which animals were used for the biodistribution work before the KrasG12D exosome trial?"
+    relevant:
+      - paper-9-abstract
+      - paper-9-method
+      - paper-9-result
+    note: "mice and Rhesus macaques, negligible toxicity. All three sections of paper 9 state it; labeling only the abstract scored a correct retrieval as a miss"
+
+  - id: p003
+    category: paper_topic
+    question: "Can exosomes be used to deliver gene editing machinery?"
+    relevant: [paper-26-abstract]
+    note: "exosome-mediated CRISPR/Cas9 delivery targeting oncogenic KrasG12D"
+
+  - id: p004
+    category: paper_detail
+    question: "What limits the usual delivery vehicles for CRISPR/Cas9?"
+    relevant: [paper-26-abstract]
+    note: "immunogenicity, restricted packaging capacity, low tolerance"
+
+  - id: p005
+    category: paper_topic
+    question: "Why does breast cancer spread to the lung but not the kidney?"
+    relevant: [paper-13-abstract]
+    note: "vascular heterogeneity of tight junction Claudins guides organotropic metastasis"
+
+  - id: p006
+    category: paper_detail
+    question: "What is different about the collagen that pancreatic cancer cells make?"
+    relevant: [paper-22-abstract]
+    note: "Col1 homotrimer of three alpha1 chains rather than the normal alpha1/alpha2/alpha1 heterotrimer"
+
+  - id: p007
+    category: paper_detail
+    question: "Which integrin does the cancer-cell collagen homotrimer bind?"
+    relevant: [paper-22-abstract]
+    note: "alpha3beta1 integrin"
+
+  - id: p008
+    category: paper_detail
+    question: "What silences Col1a2 in pancreatic cancer cells?"
+    relevant: [paper-22-abstract]
+    note: "epigenetic suppression of the Col1a2 gene"
+
+  - id: p009
+    category: paper_topic
+    question: "What does the lab know about where type I collagen comes from during development?"
+    relevant: [paper-25-abstract]
+    note: "distinct fibroblast lineages, Fap+ and Fsp1+ cells, embryogenesis and osteogenesis imperfecta"
+
+  - id: p010
+    category: paper_detail
+    question: "What fraction of bone matrix is type I collagen?"
+    relevant: [paper-25-abstract]
+    note: "90 percent of the total organic component"
+
+  - id: p011
+    category: paper_topic
+    question: "Is there tumour DNA inside circulating exosomes?"
+    relevant:
+      - paper-60-abstract
+      - paper-60-result
+    note: "double stranded genomic DNA spanning all chromosomes, mutated KRAS and p53 in serum exosomes; abstract and results both carry the claim"
+
+  - id: p012
+    category: paper_detail
+    question: "What size are exosomes said to be?"
+    relevant: [paper-60-abstract]
+    note: "50-150 nm, of endocytic origin"
+
+  - id: p013
+    category: paper_topic
+    question: "What has the lab published on natural inhibitors of blood vessel growth in tumours?"
+    relevant:
+      - paper-21-abstract
+      - paper-21-method
+      - paper-21-result
+      - paper-71-abstract
+      - paper-71-method
+      - paper-71-result
+      - paper-79-abstract
+      - paper-79-method
+      - paper-79-result
+      - paper-80-abstract
+      - paper-80-method
+      - paper-80-result
+      - paper-84-abstract
+      - paper-84-method
+      - paper-84-result
+    note: "derived: papers on endogenous inhibitors of angiogenesis (15 documents). paper-87 matches the word antiangiogenic but only in a closing remark about treatment, and is about EndMT, so it is excluded"
+
+  - id: p014
+    category: paper_detail
+    question: "Which integrin does tumstatin bind?"
+    relevant: [paper-80-abstract]
+    note: "alphavbeta3 integrin"
+
+  - id: p015
+    category: paper_detail
+    question: "How long is the active fragment of tumstatin?"
+    relevant: [paper-80-abstract]
+    note: "a 25 amino acid fragment with in vitro antiangiogenic activity"
+
+  - id: p016
+    category: paper_topic
+    question: "Where do the fibroblasts in a fibrotic heart come from?"
+    relevant: [paper-89-abstract]
+    note: "endothelial-to-mesenchymal transition contributes to cardiac fibrosis"
+
+  - id: p017
+    category: paper_detail
+    question: "What is the normal circulating concentration of BMP-7?"
+    relevant: [paper-91-abstract]
+    note: "between 100 and 300 pg/ml"
+
+  - id: p018
+    category: paper_paraphrase
+    question: "Is there anything that makes a damaged liver grow back?"
+    relevant:
+      - paper-91-abstract
+      - paper-91-method
+      - paper-91-result
+    note: "BMP-7 as a hormone facilitating liver regeneration; question avoids BMP and regeneration. Present in all three sections"
+
+  - id: p019
+    category: paper_topic
+    question: "Has the lab worked on Alport syndrome?"
+    relevant:
+      - paper-77-abstract
+      - paper-77-method
+      - paper-77-result
+      - paper-78-abstract
+      - paper-83-abstract
+      - paper-83-method
+      - paper-83-result
+      - paper-93-abstract
+      - paper-93-result
+      - paper-94-abstract
+      - paper-94-method
+      - paper-94-result
+    note: "derived: papers on Alport syndrome (12 documents). paper-78 uses an Alport model rather than studying it directly, which still answers has the lab worked on it"
+
+  - id: p020
+    category: paper_detail
+    question: "Which collagen genes are mutated in Alport syndrome?"
+    relevant: [paper-93-abstract]
+    note: "COL4A3, COL4A4 and related type IV collagen genes of the glomerular basement membrane"
+
+  - id: p021
+    category: paper_detail
+    question: "How much plasma do the glomeruli filter in a day?"
+    relevant: [paper-93-abstract]
+    note: "approximately 70-90 litres"
+
+  - id: p022
+    category: paper_paraphrase
+    question: "Did staying at home actually slow the virus down?"
+    relevant: [paper-37-abstract]
+    note: "national social distancing policies and COVID19 infection rates; deliberately colloquial"
+
+  - id: p023
+    category: paper_method
+    question: "Which Cre lines are used in the pancreatic cancer mouse models?"
+    relevant:
+      - paper-24-method
+      - paper-24-result
+    note: "Pdx1-Cre and Ptf1a-Cre with LSL-KrasG12D and LSL-Trp53R172H; in the methods and results, not the abstract"
+
+  - id: p024
+    category: paper_method
+    question: "How were the Col4a3 and Tsp1 double mutant mice made?"
+    relevant: [paper-57-method]
+    note: "crossing Col4a3 KO with Tsp1 KO on C57BL/6, interbreeding the double heterozygous F1"
+
+  - id: p025
+    category: paper_method
+    question: "Where are 4T1 cells implanted for the orthotopic model?"
+    relevant:
+      - paper-58-method
+      - paper-58-result
+    note: "mammary fat pad; 786-0 under the renal capsule, B16F10 subcutaneous. Methods and results both give it"
+
+  - id: p026
+    category: paper_result
+    question: "Which Cre driver was used to delete Trp53 and Pten in the kidney?"
+    relevant: [paper-32-result]
+    note: "Ggt1-Cre, gamma-glutamine transferase"
+
+  - id: p027
+    category: paper_topic
+    question: "What has the lab found about fibroblast subtypes in pancreatic tumours?"
+    relevant: [paper-24-abstract]
+    note: "functional heterogeneity of carcinoma-associated fibroblasts with distinct IL-6 expression"
+
+  - id: p028
+    category: paper_topic
+    question: "Does mitochondrial metabolism matter for metastasis?"
+    relevant: [paper-58-abstract]
+    note: "PGC-1alpha mediates mitochondrial biogenesis and oxidative phosphorylation in cancer cells"
+
+  - id: p029
+    category: paper_topic
+    question: "What happens to the kidney after acute injury in mice missing tumour suppressors?"
+    relevant: [paper-32-abstract]
+    note: "acute kidney injury instigates malignant renal cell carcinoma via CXCR2"
+
+  - id: p030
+    category: paper_topic
+    question: "Has the lab studied thrombospondin in kidney disease?"
+    relevant: [paper-57-abstract]
+    note: "Tsp1 deficiency shifts fibroproliferative to inflammatory kidney disease"
+
+  - id: p031
+    category: cross_document
+    question: "Which papers are about KRAS in pancreatic cancer?"
+    relevant:
+      - paper-10-abstract
+      - paper-19-abstract
+      - paper-20-abstract
+      - paper-26-abstract
+      - paper-30-abstract
+      - paper-46-abstract
+      - paper-47-abstract
+      - paper-49-abstract
+      - paper-54-abstract
+      - paper-60-abstract
+      - paper-9-abstract
+    note: "derived: paper abstracts mentioning KRAS or Kras (11 documents)"
+
+  - id: p032
+    category: cross_document
+    question: "Which of the lab's papers involve exosomes?"
+    relevant:
+      - paper-11-abstract
+      - paper-12-abstract
+      - paper-14-abstract
+      - paper-15-abstract
+      - paper-17-abstract
+      - paper-18-abstract
+      - paper-26-abstract
+      - paper-28-abstract
+      - paper-29-abstract
+      - paper-30-abstract
+      - paper-35-abstract
+      - paper-46-abstract
+      - paper-47-abstract
+      - paper-49-abstract
+      - paper-54-abstract
+      - paper-56-abstract
+      - paper-60-abstract
+      - paper-65-abstract
+      - paper-9-abstract
+    note: "derived: paper abstracts mentioning exosomes or extracellular vesicles (19 documents)"
+
+  - id: p033
+    category: cross_document
+    question: "Which papers study type IV collagen?"
+    relevant:
+      - paper-21-abstract
+      - paper-57-abstract
+      - paper-73-abstract
+      - paper-77-abstract
+      - paper-79-abstract
+      - paper-82-abstract
+      - paper-83-abstract
+      - paper-93-abstract
+      - paper-94-abstract
+      - paper-95-abstract
+    note: "derived: paper abstracts mentioning type IV collagen or Col4 (10 documents)"
+
+  - id: p034
+    category: unanswerable
+    question: "What did the lab find about exosomes in Parkinson's disease?"
+    should_abstain: true
+    relevant: []
+    note: "exosome vocabulary throughout the corpus, no neurodegeneration paper in it"
+
+  - id: p035
+    category: unanswerable
+    question: "Which journal published the lab's 2019 paper on gut microbiome transplantation?"
+    should_abstain: true
+    relevant: []
+    note: "the corpus carries titles and abstracts but no journal or year fields at all"
+
+  - id: p036
+    category: paper_result
+    question: "In scPER, what estimates the cell type proportions once the embeddings are learned?"
+    relevant:
+      - paper-8-method
+      - paper-8-result
+    note: "XGBoost regression on the adversarial autoencoder embeddings; absent from paper-8-abstract, which describes the autoencoder but never names the regressor"
+
+  - id: p037
+    category: paper_result
+    question: "How does SE-FPLC compare with commercial kits for removing albumin?"
+    relevant:
+      - paper-14-method
+      - paper-14-result
+    note: "as little as 18 min against over 1 h 30 min for commercially available albumin-depletion kits; the comparison is in both body sections and in neither the abstract"
+
+  - id: p038
+    category: paper_result
+    question: "How many genes came out differentially expressed in the twin-twin transfusion amniotic fluid study?"
+    relevant: [paper-11-result]
+    note: "62 DEGs, from 27 of 31 sequenced samples surviving quality control; the abstract gives neither count"
+
+  - id: p039
+    category: cross_document
+    question: "Which of the lab's papers use CRISPR?"
+    relevant:
+      - paper-13-method
+      - paper-13-result
+      - paper-26-abstract
+      - paper-26-method
+      - paper-26-result
+      - paper-32-abstract
+      - paper-32-method
+      - paper-32-result
+    note: "derived: every paper or paper section mentioning CRISPR (8 documents across 3 papers). paper-13 mentions it only in the body, so an abstract-only system cannot return it however it is asked"
+
+  - id: q089
+    category: people
+    question: "Who handles onboarding for people joining the lab?"
+    relevant: [member-roxanna-zarate-384ce3]
+    note: "program manager, administrative coordination and staff onboarding; sole mention of onboarding among the 37 member documents. Phrased with the word onboarding on purpose. The variant avoiding it, who sets up a new person when they join, returns nothing relevant in the top ten: a 60-token bio has little for either leg to match on, and the full-text paper sections outweigh it. Recorded here because it is a real limit, not a question worth failing on ambiguity"

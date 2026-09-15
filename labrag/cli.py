@@ -242,12 +242,29 @@ def cmd_answer_all(args) -> int:
         questions = [q for q in questions if q.id in wanted]
     done: set[str] = set()
     if args.resume and args.out.exists():
+        # A record carrying an error is not a finished question. Resuming used to skip it
+        # anyway, which meant a run that lost seventeen questions to an exhausted token
+        # budget could never be completed by resuming it, only by starting over. The kept
+        # records are rewritten so a retry replaces its failure rather than appending a
+        # second record under the same id.
+        kept = []
+        failed = 0
         for line in args.out.open(encoding="utf-8"):
             line = line.strip()
-            if line:
-                done.add(json.loads(line).get("id"))
+            if not line:
+                continue
+            record = json.loads(line)
+            if record.get("error"):
+                failed += 1
+            else:
+                kept.append(record)
+                done.add(record.get("id"))
+        with args.out.open("w", encoding="utf-8") as handle:
+            for record in kept:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
         questions = [q for q in questions if q.id not in done]
-        print(f"resuming: {len(done)} already answered, {len(questions)} left")
+        print(f"resuming: {len(done)} answered, {failed} to retry, "
+              f"{len(questions)} to do")
     if args.limit:
         questions = questions[: args.limit]
     if not questions:
@@ -473,10 +490,15 @@ def main(argv=None) -> int:
                        help="chat model; also LABGPT_LLM_MODEL")
     p_ask.add_argument("--base-url", default=None,
                        help="OpenAI-compatible endpoint; also LABGPT_LLM_BASE_URL")
-    # Reasoning models spend this budget on thinking before writing anything, so it is
-    # not the answer length. 800 is comfortable for a cited answer at low effort and can
-    # be exhausted entirely by reasoning at high effort.
-    p_ask.add_argument("--max-tokens", type=int, default=800)
+    # Reasoning models spend this budget on thinking before writing anything, so it is a
+    # ceiling on reasoning plus answer, not on answer length.
+    #
+    # It was 800, chosen against a one-word prompt where low effort spent no reasoning at
+    # all. That generalised badly. Over 101 real questions with retrieved context, low
+    # effort spent a median of 192 reasoning tokens, 448 at the 90th percentile and 704 at
+    # the worst successful call, and seventeen questions consumed all 800 without writing
+    # a word. 2500 leaves room for the worst of those plus a full cited answer.
+    p_ask.add_argument("--max-tokens", type=int, default=2500)
     p_ask.add_argument("--reasoning-effort", default=None,
                        choices=("minimal", "low", "medium", "high"),
                        help="reasoning models only; omitted means the endpoint default")
@@ -501,7 +523,7 @@ def main(argv=None) -> int:
                        help="append, skipping ids already in --out")
     p_all.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
     p_all.add_argument("--base-url", default=None)
-    p_all.add_argument("--max-tokens", type=int, default=800)
+    p_all.add_argument("--max-tokens", type=int, default=2500)
     p_all.add_argument("--reasoning-effort", default=None,
                        choices=("minimal", "low", "medium", "high"))
     p_all.set_defaults(func=cmd_answer_all)

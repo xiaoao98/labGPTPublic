@@ -40,14 +40,20 @@ metrics*.jsonl
 # whatever it was built from, so the default has to be exclusion.
 .index*/
 
-# Fetched evaluation corpus. Rebuild with tools/fetch_eval_corpus.py
-# Not committed: several sources are CC BY-NC-ND.
+# Corpora. Excluded by default, then allowed back one at a time.
+#
+# Listing each corpus by name is how data/eval_lab shipped uncommitted-but-committable
+# once, and how data/public later sat untracked with 2.5 MB of journal full text in it.
+# A corpus directory is whatever someone dropped there, so the rule has to start from no.
+#
+# data/sample is the synthetic corpus this repository is meant to ship.
+# data/eval is fetched by tools/fetch_eval_corpus.py; only its manifest is committed,
+# because several of its sources are CC BY-NC-ND and reformatting them is a derivative.
+data/*
+!data/sample/
+!data/eval/
 data/eval/*
 !data/eval/manifest.json
-
-# Private laboratory corpus for the head-to-head comparison against the old system.
-# Real protocols, reagents, members and publications; never committed.
-data/eval_lab/
 
 # The question set built over that corpus. Excluded for the same reason the corpus is:
 # each question carries a note recording the answer it was labeled against, so the file
