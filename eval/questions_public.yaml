@@ -335,8 +335,11 @@ questions:
   - id: p012
     category: paper_detail
     question: "What size are exosomes said to be?"
-    relevant: [paper-60-abstract]
-    note: "50-150 nm, of endocytic origin"
+    relevant:
+      - paper-11-result
+      - paper-56-result
+      - paper-60-abstract
+    note: "derived: every paper stating a vesicle size range (3 documents). The three disagree, at 50-150, 40-160 and 50-140 nm, which is the point: the question has no single answer and a correct response surfaces the spread rather than picking one. Labeling only the abstract scored two correct retrievals as misses."
 
   - id: p013
     category: paper_topic
@@ -432,9 +435,26 @@ questions:
     category: paper_method
     question: "Which Cre lines are used in the pancreatic cancer mouse models?"
     relevant:
+      - paper-10-method
+      - paper-10-result
+      - paper-16-method
+      - paper-16-result
+      - paper-19-method
+      - paper-20-result
+      - paper-22-result
       - paper-24-method
       - paper-24-result
-    note: "Pdx1-Cre and Ptf1a-Cre with LSL-KrasG12D and LSL-Trp53R172H; in the methods and results, not the abstract"
+      - paper-26-result
+      - paper-31-result
+      - paper-33-method
+      - paper-33-result
+      - paper-46-method
+      - paper-51-method
+      - paper-51-result
+      - paper-52-method
+      - paper-9-method
+      - paper-9-result
+    note: "derived: every paper or section naming a pancreatic Cre driver (19 documents). Pdx1-Cre and Ptf1a-Cre with LSL-KrasG12D and LSL-Trp53R172H is the answer, and it is stated in nineteen places, not the two originally labeled."
 
   - id: p024
     category: paper_method
@@ -446,9 +466,14 @@ questions:
     category: paper_method
     question: "Where are 4T1 cells implanted for the orthotopic model?"
     relevant:
+      - paper-13-method
+      - paper-39-method
       - paper-58-method
       - paper-58-result
-    note: "mammary fat pad; 786-0 under the renal capsule, B16F10 subcutaneous. Methods and results both give it"
+      - paper-67-result
+      - paper-68-method
+      - paper-68-result
+    note: "mammary fat pad, stated in 7 documents. Derived by proximity then read one by one: paper-56-result implants MCF10A not 4T1, paper-13-result says tumors did not originate there, and paper-39-result describes the tissue rather than where 4T1 goes, so all three are excluded."
 
   - id: p026
     category: paper_result
@@ -593,3 +618,219 @@ questions:
     question: "Who handles onboarding for people joining the lab?"
     relevant: [member-roxanna-zarate-384ce3]
     note: "program manager, administrative coordination and staff onboarding; sole mention of onboarding among the 37 member documents. Phrased with the word onboarding on purpose. The variant avoiding it, who sets up a new person when they join, returns nothing relevant in the top ten: a 60-token bio has little for either leg to match on, and the full-text paper sections outweigh it. Recorded here because it is a real limit, not a question worth failing on ambiguity"
+
+  # --- protocols and reagents, over the public corpus ------------------------
+  # Thirty questions replacing the twenty-nine dropped when the lab's protocols and
+  # reagents were swapped out. Same category mix as what was lost, so the set is not
+  # quietly reweighted towards publications. Grounded in the PMC articles that are
+  # actually in data/public_papers, and every answer was checked to be in the document
+  # it is labeled against, with multi-answer sets derived rather than hand-listed.
+
+  - id: r001
+    category: exact_identifier
+    question: "Which kit is used for guide RNA in vitro transcription, and what is its catalog number?"
+    relevant: [protocol-in-vitro-guide-rna-synthesis-and-rnp-ass-f5a2a8]
+    note: "HiScribe T7 High Yield RNA Synthesis Kit, NEB Cat#E2040S"
+
+  - id: r002
+    category: exact_identifier
+    question: "What size should the PCR product be when making the guide RNA template?"
+    relevant: [protocol-in-vitro-guide-rna-synthesis-and-rnp-ass-f5a2a8]
+    note: "66 bp, checked by running 2 uL on a 2 percent agarose gel"
+
+  - id: r003
+    category: exact_identifier
+    question: "What A260/280 ratio indicates the guide RNA synthesis worked?"
+    relevant: [protocol-in-vitro-guide-rna-synthesis-and-rnp-ass-f5a2a8]
+    note: "2.0 to 2.2 after transcription and purification"
+
+  - id: r004
+    category: exact_identifier
+    question: "Which rotor is used for the gradient ultracentrifugation of milk samples?"
+    relevant: [protocol-gradient-ultracentrifugation-pmc8449126-71dc8d]
+    note: "SW Type 32.1 Ti in an Optima XPN-100"
+
+  - id: r005
+    category: exact_identifier
+    question: "How much Optiprep and how much sample make the 40 percent bottom layer?"
+    relevant: [protocol-gradient-ultracentrifugation-pmc8449126-71dc8d]
+    note: "4.67 mL Optiprep plus 2.33 mL sample, 7 mL total"
+
+  - id: r006
+    category: exact_identifier
+    question: "What gauge needle is used to flush bone marrow out of the bones?"
+    relevant: [protocol-generation-of-murine-bone-marrow-derived-886bd1]
+    note: "23 G needle on a 1 mL syringe filled with sterile PBS"
+
+  - id: r007
+    category: exact_identifier
+    question: "How many dounce strokes are needed to lyse the worms?"
+    relevant: [protocol-nuclei-isolation-pmc8649397-76e3c1]
+    note: "40 strokes, then check an aliquot under a stereomicroscope"
+
+  - id: r008
+    category: exact_identifier
+    question: "What passage number should the HEK293T cells be at or below?"
+    relevant: [protocol-third-generation-lentivirus-production-a-9587bc]
+    note: "P16 or less"
+
+  - id: r009
+    category: exact_identifier
+    question: "What concentration of mEGF goes into the standard organoid medium?"
+    relevant: [protocol-medium-for-organoid-cultures-enr-pmc8689-3bafe4]
+    note: "50 ng/mL, alongside 20 percent R-spondin1 and 10 percent Noggin medium"
+
+  - id: r010
+    category: exact_identifier
+    question: "What is the catalog number for recombinant R-spondin1?"
+    relevant: [protocol-medium-for-organoid-cultures-enr-pmc8689-3bafe4]
+    note: "R&D Systems #7150-RS, with Noggin at #6997-NG"
+
+  - id: r011
+    category: exact_identifier
+    question: "Which Sigma catalog number is given for ready-made PBS?"
+    relevant: [reagent-ultracentrifugal-separation-characteriza-4de256]
+    note: "Sigma Cat# P5368-10PAK, with Thermo Fisher 14190144 as the other option"
+
+  - id: r012
+    category: procedure_detail
+    question: "At what temperature and for how long is Evans blue conjugated to BSA?"
+    relevant: [reagent-visualizing-murine-breast-and-melanoma-t-f23b00]
+    note: "22 C to 24 C for 2 h, wrapped in aluminum foil"
+
+  - id: r013
+    category: procedure_detail
+    question: "Which filters are used after the Evans blue conjugation incubation?"
+    relevant: [reagent-visualizing-murine-breast-and-melanoma-t-f23b00]
+    note: "0.45 um once, then two rounds through 0.22 um"
+
+  - id: r014
+    category: procedure_detail
+    question: "How is unconjugated Evans blue removed?"
+    relevant: [reagent-visualizing-murine-breast-and-melanoma-t-f23b00]
+    note: "dialysis against 2 liters of refrigerated sterile saline for 2 to 4 h at 4 C"
+
+  - id: r015
+    category: procedure_detail
+    question: "How long can the standard organoid medium be kept, and at what temperature?"
+    relevant: [protocol-medium-for-organoid-cultures-enr-pmc8689-3bafe4]
+    note: "4 C for up to 2 months, or aliquoted into 50 mL tubes at -20 C for up to 6 months"
+
+  - id: r016
+    category: procedure_detail
+    question: "How is the DNA template removed after in vitro transcription?"
+    relevant: [protocol-in-vitro-guide-rna-synthesis-and-rnp-ass-f5a2a8]
+    note: "1 uL, 2 units, of RNase-free DNase for 15 min at 37 C, then a Monarch RNA Cleanup Kit"
+
+  - id: r017
+    category: procedure_detail
+    question: "How closely do the ultracentrifuge tubes have to be balanced?"
+    relevant:
+      - protocol-differential-ultracentrifugation-pmc8449-23223d
+      - protocol-gradient-ultracentrifugation-pmc8449126-71dc8d
+      - protocol-refractive-index-determination-and-pooli-12b6b3
+    note: "derived: every stage specifying the same 0.01 g/mL tolerance on a microbalance"
+
+  - id: r018
+    category: procedure_detail
+    question: "What size strainer is used when flushing bone marrow?"
+    relevant: [protocol-generation-of-murine-bone-marrow-derived-886bd1]
+    note: "40 um strainer, one per mouse. Rewritten: the question used to ask what size is used when preparing the cell suspension, which has no single answer here. A protocol titled Generating cell suspension specifies 100 um and then 40 um, and was returned at rank 1 and scored wrong, while the derivation missed it because its text reads Falcon(R) Cell Strainers rather than the bare word."
+
+  - id: r019
+    category: procedure_detail
+    question: "At what angle is the tube held while the gradient layers are formed?"
+    relevant: [protocol-gradient-ultracentrifugation-pmc8449126-71dc8d]
+    note: "roughly 70 degrees, with the iodixanol added drop by drop"
+
+  - id: r020
+    category: procedure_detail
+    question: "When should frozen HEK293T cells come out of the water bath?"
+    relevant: [protocol-third-generation-lentivirus-production-a-9587bc]
+    note: "as soon as one ice crystal remains, then transferred dropwise into 10 mL of complete DMEM"
+
+  - id: r021
+    category: procedure_detail
+    question: "What speed and time is used to spin down the thawed HEK293T cells?"
+    relevant: [protocol-third-generation-lentivirus-production-a-9587bc]
+    note: "300 x g for 5 min, then counted with Trypan Blue"
+
+  - id: r023
+    category: paraphrase
+    question: "How do I crack worms open to get at what is inside their cells?"
+    relevant: [protocol-nuclei-isolation-pmc8649397-76e3c1]
+    note: "dounce homogenisation in nuclei extraction buffer; avoids dounce, lyse and nuclei"
+
+  - id: r024
+    category: paraphrase
+    question: "How do I keep my heavy and light layers from mixing as I pour them?"
+    relevant: [protocol-gradient-ultracentrifugation-pmc8449126-71dc8d]
+    note: "adding the iodixanol drop by drop. The collagen protocol also says drop by drop but about not breaking a hydrogel, which is not an answer to this question"
+
+  - id: r025
+    category: paraphrase
+    question: "My buffer came as a concentrate. What do I add to bring it down to working strength?"
+    relevant: [reagent-ultracentrifugal-separation-characteriza-4de256]
+    note: "ddH2O, for both the 10x PBS and the 5x protein sample buffer"
+
+  - id: r026
+    category: cross_document
+    question: "Which protocols pass something through a 0.22 micron filter?"
+    relevant:
+      - protocol-third-generation-lentivirus-production-a-9587bc
+      - reagent-detection-of-sars-cov-2-spike-protein-bi-1bf4ad
+      - reagent-direct-conversion-of-adult-fibroblasts-i-97cf26
+      - reagent-facs-based-protocol-to-assess-cytotoxici-0b6a6a
+      - reagent-generating-stable-isolated-mitochondrial-a94af1
+      - reagent-global-run-on-sequencing-to-measure-nasc-74916d
+      - reagent-isolation-and-culturing-of-primary-mouse-db32e4
+      - reagent-isolation-and-in-vitro-cultivation-of-ad-b94284
+      - reagent-isolation-of-human-fetal-intestinal-cell-1a1734
+      - reagent-protocol-for-the-separation-of-extracell-d6a80b
+      - reagent-purification-and-cryo-em-structure-deter-3dfdae
+      - reagent-quantitative-3d-analysis-and-visualizati-c85b72
+      - reagent-visualizing-murine-breast-and-melanoma-t-f23b00
+    note: "derived: every protocol or reagent document specifying 0.22 um (13 documents)"
+
+  - id: r027
+    category: cross_document
+    question: "Which steps spin at 300 x g?"
+    relevant:
+      - protocol-assessing-her2-car-expression-by-flow-cy-36dc01
+      - protocol-flow-cytometry-based-her2-car-nk-cell-cy-c8a142
+      - protocol-lentivirus-titration-on-hek293t-cells-pm-c8906e
+      - protocol-part-a-generation-of-3d-mixed-organoids-2eb7f7
+      - protocol-part-b-generation-of-mixed-enteroid-mono-ecd80c
+      - protocol-preparation-of-organoids-pmc8666359-10a0f9
+      - protocol-sampling-from-the-bioreactor-pmc8666714-e1e9c7
+      - protocol-sorting-cells-from-mixed-organoids-pmc86-028a7b
+      - protocol-thawing-and-adherent-pre-culture-of-hpsc-d6a8bd
+      - protocol-third-generation-lentivirus-production-a-9587bc
+      - protocol-transduction-of-expanded-nk-cells-with-h-0ea035
+      - reagent-sucrose-gradient-chromatin-enrichment-fo-176848
+    note: "derived: every document specifying 300 x g (12 documents)"
+
+  - id: r028
+    category: cross_document
+    question: "Which protocols involve liquid nitrogen?"
+    relevant:
+      - protocol-balf-and-lung-tissue-sampling-pmc8649400-75ea0d
+      - protocol-raw-data-collection-pmc8605398-fe57f1
+      - protocol-third-generation-lentivirus-production-a-9587bc
+      - protocol-western-blotting-for-verification-of-rec-70e9a9
+      - reagent-protocol-to-preserve-mouse-freeze-dried-cf0ecc
+    note: "derived: every document mentioning liquid nitrogen (5 documents)"
+
+  - id: r029
+    category: unanswerable
+    question: "What sonication amplitude should I use to break the cells open?"
+    should_abstain: true
+    relevant: []
+    note: "sonication is never given an amplitude anywhere in this corpus, though the vocabulary of cell disruption is all over it"
+
+  - id: r030
+    category: unanswerable
+    question: "How do I calibrate the mass spectrometer before a run?"
+    should_abstain: true
+    relevant: []
+    note: "no mass spectrometry calibration in the corpus; the question is shaped like the protocols that are in it"
