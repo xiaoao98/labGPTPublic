@@ -24,8 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import labgpt_config as cfg  # noqa: E402
 
 from .answerer import (  # noqa: E402
-    Answerer, ChatClient, DEFAULT_ABSTAIN_COSINE, LLMError,
-    chat_client_from_env, should_abstain,
+    Answerer, ChatClient, DEFAULT_ABSTAIN_COSINE, LLMError, should_abstain,
 )
 from .chunker import write_chunks  # noqa: E402
 from .documents import write_documents  # noqa: E402
@@ -192,17 +191,10 @@ def cmd_ask(args) -> int:
 
 
 def _client(args):
-    """The chat client these arguments ask for.
-
-    base_url is only meaningful for the OpenAI-shaped client; an Azure endpoint is
-    assembled from the deployment and api-version instead, so it is passed only when it
-    would be used.
-    """
-    kwargs = {"max_tokens": args.max_tokens, "reasoning_effort": args.reasoning_effort}
-    if getattr(args, "base_url", None):
-        kwargs["base_url"] = args.base_url
-    return chat_client_from_env(model=getattr(args, "model", None),
-                                provider=args.provider, **kwargs)
+    """The chat client these arguments ask for."""
+    return ChatClient(model=args.model, base_url=getattr(args, "base_url", None),
+                      max_tokens=args.max_tokens,
+                      reasoning_effort=args.reasoning_effort)
 
 
 def cmd_selftest(args) -> int:
@@ -212,14 +204,7 @@ def cmd_selftest(args) -> int:
     cheaper to read here than on question 87 of a run that has been going for an hour.
     """
     client = _client(args)
-    kind = type(client).__name__
-    shown = client.url
-    if "api-version" in shown or "/deployments/" in shown:
-        print(f"client      {kind}")
-        print(f"endpoint    {shown}")
-    else:
-        print(f"client      {kind}")
-        print(f"endpoint    {shown}  model={client.model}")
+    print(f"endpoint    {client.url}  model={client.model}")
     print(f"key         {'set, ' + str(len(client._key)) + ' chars' if client._key else 'MISSING'}")
     print(f"shape       {'reasoning (max_completion_tokens, no temperature)' if client._reasoning else 'classic (max_tokens, temperature)'}")
     print("\nsending one prompt ...")
@@ -488,8 +473,6 @@ def main(argv=None) -> int:
                        help="chat model; also LABGPT_LLM_MODEL")
     p_ask.add_argument("--base-url", default=None,
                        help="OpenAI-compatible endpoint; also LABGPT_LLM_BASE_URL")
-    p_ask.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"),
-                       help="auto prefers Azure when its variables are set")
     # Reasoning models spend this budget on thinking before writing anything, so it is
     # not the answer length. 800 is comfortable for a cited answer at low effort and can
     # be exhausted entirely by reasoning at high effort.
@@ -502,7 +485,6 @@ def main(argv=None) -> int:
     p_self = sub.add_parser("selftest", help="send one prompt, to check the endpoint")
     p_self.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
     p_self.add_argument("--base-url", default=None)
-    p_self.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
     p_self.add_argument("--max-tokens", type=int, default=512)
     p_self.add_argument("--reasoning-effort", default=None,
                         choices=("minimal", "low", "medium", "high"))
@@ -519,7 +501,6 @@ def main(argv=None) -> int:
                        help="append, skipping ids already in --out")
     p_all.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
     p_all.add_argument("--base-url", default=None)
-    p_all.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
     p_all.add_argument("--max-tokens", type=int, default=800)
     p_all.add_argument("--reasoning-effort", default=None,
                        choices=("minimal", "low", "medium", "high"))
