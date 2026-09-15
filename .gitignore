@@ -54,3 +54,7 @@ data/eval_lab/
 # is a few hundred short extracts from the private documents even though it holds none
 # of them whole. eval/questions.yaml stays tracked; its corpus is published protocols.
 eval/questions_lab.yaml
+
+# Generated answer runs. Answers over the private corpus quote it back verbatim, so the
+# output is as sensitive as the input that produced it, whichever corpus that was.
+runs/

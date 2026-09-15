@@ -13,8 +13,10 @@ embedding, which is the slow part. Get the chunk boundaries right first, then in
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -22,7 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import labgpt_config as cfg  # noqa: E402
 
 from .answerer import (  # noqa: E402
-    Answerer, ChatClient, DEFAULT_ABSTAIN_COSINE, should_abstain,
+    Answerer, ChatClient, DEFAULT_ABSTAIN_COSINE, LLMError,
+    chat_client_from_env, should_abstain,
 )
 from .chunker import write_chunks  # noqa: E402
 from .documents import write_documents  # noqa: E402
@@ -171,9 +174,7 @@ def cmd_ask(args) -> int:
 
     answerer = Answerer(
         retriever,
-        client=ChatClient(model=args.model, base_url=args.base_url,
-                          max_tokens=args.max_tokens,
-                          reasoning_effort=args.reasoning_effort),
+        client=_client(args),
         k=args.k,
         abstain_cosine=args.threshold,
     )
@@ -187,6 +188,137 @@ def cmd_ask(args) -> int:
         print(f"INVALID citations emitted: {answer.invalid_citations}")
     if answer.uncited_sentences:
         print(f"uncited factual sentences: {answer.uncited_sentences}")
+    return 0
+
+
+def _client(args):
+    """The chat client these arguments ask for.
+
+    base_url is only meaningful for the OpenAI-shaped client; an Azure endpoint is
+    assembled from the deployment and api-version instead, so it is passed only when it
+    would be used.
+    """
+    kwargs = {"max_tokens": args.max_tokens, "reasoning_effort": args.reasoning_effort}
+    if getattr(args, "base_url", None):
+        kwargs["base_url"] = args.base_url
+    return chat_client_from_env(model=getattr(args, "model", None),
+                                provider=args.provider, **kwargs)
+
+
+def cmd_selftest(args) -> int:
+    """One trivial prompt, to prove the endpoint works before a batch is committed to it.
+
+    Worth its own command because the failures are all configuration and they are much
+    cheaper to read here than on question 87 of a run that has been going for an hour.
+    """
+    client = _client(args)
+    kind = type(client).__name__
+    shown = client.url
+    if "api-version" in shown or "/deployments/" in shown:
+        print(f"client      {kind}")
+        print(f"endpoint    {shown}")
+    else:
+        print(f"client      {kind}")
+        print(f"endpoint    {shown}  model={client.model}")
+    print(f"key         {'set, ' + str(len(client._key)) + ' chars' if client._key else 'MISSING'}")
+    print(f"shape       {'reasoning (max_completion_tokens, no temperature)' if client._reasoning else 'classic (max_tokens, temperature)'}")
+    print("\nsending one prompt ...")
+    started = time.perf_counter()
+    try:
+        text, usage = client.complete(
+            [{"role": "user", "content": "Reply with exactly: OK"}])
+    except LLMError as exc:
+        print(f"\nFAILED: {exc}")
+        return 1
+    elapsed = time.perf_counter() - started
+    details = usage.get("completion_tokens_details", {})
+    print(f"reply       {text!r}")
+    print(f"elapsed     {elapsed:.1f}s")
+    print(f"tokens      prompt {usage.get('prompt_tokens')}  "
+          f"completion {usage.get('completion_tokens')}  "
+          f"reasoning {details.get('reasoning_tokens', 0)}")
+    if client._reasoning != type(client)._looks_like_reasoning_model(client.model):
+        print("\nnote: the request shape was corrected on the first call; the deployment "
+              "name did not predict it. Nothing to do, the client remembers.")
+    print("\nOK")
+    return 0
+
+
+def cmd_answer_all(args) -> int:
+    """Answer every question in a set, recording what each one cost.
+
+    Writes JSONL, one record per line, flushed as it goes, so an interrupted run keeps
+    everything it had finished. Re-run with --resume pointed at the same file to continue.
+    """
+    store = VectorStore.load(args.index_dir)
+    questions = load_questions(args.questions)
+    if args.only:
+        wanted = {q.strip() for q in args.only.split(",")}
+        questions = [q for q in questions if q.id in wanted]
+    done: set[str] = set()
+    if args.resume and args.out.exists():
+        for line in args.out.open(encoding="utf-8"):
+            line = line.strip()
+            if line:
+                done.add(json.loads(line).get("id"))
+        questions = [q for q in questions if q.id not in done]
+        print(f"resuming: {len(done)} already answered, {len(questions)} left")
+    if args.limit:
+        questions = questions[: args.limit]
+    if not questions:
+        print("nothing to do")
+        return 0
+
+    embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+    retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=args.k)
+    answerer = Answerer(retriever, client=_client(args), k=args.k,
+                        abstain_cosine=args.threshold)
+
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    handle = args.out.open("a" if args.resume else "w", encoding="utf-8")
+    started = time.perf_counter()
+    errors = 0
+    try:
+        for index, question in enumerate(questions, start=1):
+            elapsed = time.perf_counter() - started
+            eta = (elapsed / max(index - 1, 1)) * (len(questions) - index + 1) / 60
+            print(f"[{index}/{len(questions)}] {question.id}  "
+                  f"{question.question[:52]}   (eta {eta:.0f} min)")
+            record = {"id": question.id, "category": question.category,
+                      "should_abstain": question.should_abstain,
+                      "question": question.question, "system": "new-rag"}
+            one = time.perf_counter()
+            try:
+                answer = answerer.answer(question.question)
+                record.update(answer.to_dict())
+                # Flattened out of usage so the cost of a run can be read without
+                # digging: reasoning tokens are billed as completion tokens but are
+                # not part of the answer, so the two are worth seeing side by side.
+                usage = answer.usage or {}
+                details = usage.get("completion_tokens_details", {})
+                record.update({
+                    "prompt_tokens": usage.get("prompt_tokens"),
+                    "completion_tokens": usage.get("completion_tokens"),
+                    "reasoning_tokens": details.get("reasoning_tokens"),
+                    "total_tokens": usage.get("total_tokens"),
+                })
+            except Exception as exc:  # noqa: BLE001 - one bad question must not end the run
+                errors += 1
+                record.update({"answer": "", "error": repr(exc)})
+                print(f"    error: {exc}")
+            # Wall clock for the whole question. latency_ms from to_dict covers only the
+            # model call, so the difference is retrieval and gating.
+            record["elapsed_s"] = round(time.perf_counter() - one, 2)
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+            handle.flush()
+    finally:
+        handle.close()
+
+    total = time.perf_counter() - started
+    print(f"\nwrote {args.out}")
+    print(f"  questions   {len(questions)}")
+    print(f"  errors      {errors}")
+    print(f"  wall clock  {total / 60:.1f} min  ({total / max(len(questions), 1):.1f}s each)")
     return 0
 
 
@@ -356,6 +488,8 @@ def main(argv=None) -> int:
                        help="chat model; also LABGPT_LLM_MODEL")
     p_ask.add_argument("--base-url", default=None,
                        help="OpenAI-compatible endpoint; also LABGPT_LLM_BASE_URL")
+    p_ask.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"),
+                       help="auto prefers Azure when its variables are set")
     # Reasoning models spend this budget on thinking before writing anything, so it is
     # not the answer length. 800 is comfortable for a cited answer at low effort and can
     # be exhausted entirely by reasoning at high effort.
@@ -364,6 +498,32 @@ def main(argv=None) -> int:
                        choices=("minimal", "low", "medium", "high"),
                        help="reasoning models only; omitted means the endpoint default")
     p_ask.set_defaults(func=cmd_ask)
+
+    p_self = sub.add_parser("selftest", help="send one prompt, to check the endpoint")
+    p_self.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
+    p_self.add_argument("--base-url", default=None)
+    p_self.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
+    p_self.add_argument("--max-tokens", type=int, default=512)
+    p_self.add_argument("--reasoning-effort", default=None,
+                        choices=("minimal", "low", "medium", "high"))
+    p_self.set_defaults(func=cmd_selftest)
+
+    p_all = sub.add_parser("answer-all", help="answer a whole question set, to JSONL")
+    p_all.add_argument("--questions", type=Path, required=True)
+    p_all.add_argument("--out", type=Path, required=True)
+    p_all.add_argument("-k", type=int, default=6)
+    p_all.add_argument("--threshold", type=float, default=DEFAULT_ABSTAIN_COSINE)
+    p_all.add_argument("--limit", type=int, help="first N questions only")
+    p_all.add_argument("--only", help="comma-separated question ids")
+    p_all.add_argument("--resume", action="store_true",
+                       help="append, skipping ids already in --out")
+    p_all.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
+    p_all.add_argument("--base-url", default=None)
+    p_all.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
+    p_all.add_argument("--max-tokens", type=int, default=800)
+    p_all.add_argument("--reasoning-effort", default=None,
+                       choices=("minimal", "low", "medium", "high"))
+    p_all.set_defaults(func=cmd_answer_all)
 
     args = parser.parse_args(argv)
     return args.func(args)
