@@ -14,9 +14,25 @@ to build a RAG system that is either imprecise or unsafe.
 So chunks are what get scored, and documents are what get returned. This is the pattern
 usually called small-to-big, or parent-document retrieval.
 
-Expansion applies only to the doc types where a document is genuinely larger than its
-chunks: protocols, reagent lists and member bios. Safety Q&A and paper abstracts are
-already single answers, so their chunk and document texts are identical.
+Expansion applies to protocols, reagent lists and member bios, where the document is
+genuinely larger than its chunks and is read as a unit. For safety entries and paper
+abstracts it would be a no-op: they are one chunk each, so chunk and document text are
+the same string.
+
+Paper sections are the deliberate exception. They are chunked like protocols, twelve
+pieces to a section on average and forty-four for the longest, so expanding them is not a
+no-op at all, and it is still not done. A protocol is executed from step 1 to step 10 and
+handing back nine of them is dangerous; a methods section is read for the one detail being
+asked about, and the surrounding paragraphs about antibody dilutions and imaging settings
+answer nothing. The cost is what settles it. Retrieved evidence already averages 3,277
+tokens and reaches 13,602 on the worst question, and final_k caps documents rather than
+tokens, so one expanded section would push out five other documents and lengthen the
+prompt at the same time.
+
+This split used to read as though paper sections were single chunks. They were, until
+real articles turned out to produce 2,747-token blocks and they were routed through the
+chunker; the rule here did not change with them, and the reason above is why it should
+not.
 
 Linking is separate from expansion. A protocol and a reagent list for the same experiment
 are related but not the same document, and in the real corpus their key spaces do not even
