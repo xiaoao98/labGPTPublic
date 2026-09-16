@@ -145,7 +145,9 @@ def cmd_search(args) -> int:
 def cmd_ask(args) -> int:
     store = VectorStore.load(args.index_dir)
     embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
-    retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=args.k)
+    retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=args.k,
+                          reranker=_reranker(args),
+                          rerank_candidates=getattr(args, "rerank_candidates", 40))
 
     result = retriever.retrieve(args.question, k=args.k)
     abstain, reason = should_abstain(result, args.threshold)
@@ -312,7 +314,9 @@ def cmd_answer_all(args) -> int:
         return 0
 
     embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
-    retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=args.k)
+    retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=args.k,
+                          reranker=_reranker(args),
+                          rerank_candidates=getattr(args, "rerank_candidates", 40))
     answerer = Answerer(retriever, client=_client(args), k=args.k,
                         abstain_cosine=args.threshold)
 
