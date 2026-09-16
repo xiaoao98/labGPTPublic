@@ -99,7 +99,45 @@ Weakest categories, and the two that account for most of the retrieval loss:
 
 Both for the same reason: a 60-token biography and a question sharing no vocabulary with
 its document give neither leg much to match on, against full-text sections that give both
-legs plenty. Length normalisation or a reranking pass is the next thing worth trying.
+legs plenty.
+
+### Reranking
+
+A cross-encoder pass over the fused candidates, off by default, `--rerank`. It exists
+because fusion reads ranks and discards scores, so a document one leg is certain about
+loses to one both legs merely like.
+
+| | success@1 | success@6 | nDCG@10 | seconds per query |
+|---|---|---|---|---|
+| no reranker | 0.469 | 0.938 | 0.702 | ~0.1 |
+| ms-marco-MiniLM-L-6, 22M | 0.630 | 0.938 | 0.781 | 2.3 |
+| **bge-reranker-base, 278M** | **0.802** | **0.963** | **0.854** | 13.1 |
+
+The larger model is better on every measure, and the difference between the two is not a
+matter of degree. MiniLM reorders without finding anything new, leaving success@6 at
+0.938, and it pays for its gains elsewhere: `safety` drops from 1.000 to 0.875 and
+`paraphrase`'s recall@10 from 1.000 to 0.333. bge moves success@6 to 0.963, holds `safety`
+and `paper_topic` at 1.000, and takes `exact_identifier` and `paper_result` to 1.000 at
+success@1. `people` goes from 0.333 to 0.889 at success@1.
+
+So the first reading, that reranking helps ordering but costs safety, was a property of
+the small model rather than of reranking.
+
+Two things this does not fix. `paraphrase` stays at 0.333 under every configuration tried,
+because three questions written to share no vocabulary with their sources defeat the
+cross-encoder as thoroughly as they defeat the bi-encoder. And 13.1 seconds a query on
+this CPU is more than the generation step itself at 6.2; on a GPU this model runs in tens
+of milliseconds and the trade disappears, which is why it is available rather than
+default.
+
+Candidate pool size was tested and left at 20 per leg. Raising both to 50 gives exactly
+the same success@1 with success@6 1.2 points lower and twice the latency, which follows
+from something already measured: gold documents reach 100% coverage by fused rank 30, so a
+larger pool adds only candidates ranked below where any of them sit.
+
+**The end-to-end figures above are the unreranked configuration.** Generation has not been
+re-run with the reranker on, so 90 of 100 is what the default pipeline scores and the
+retrieval gain has not been shown to carry through to answers.
 
 ### Grounding
 
@@ -198,6 +236,7 @@ uv run python -m labrag.cli search "SMP-17104" --explain   # retrieve, no LLM
 uv run python -m labrag.cli ask "how do I thaw BJ cells" --dry-run  # gate + prompt
 uv run python -m labrag.cli eval --failures    # score retrieval against a question set
 uv run python -m labrag.cli sweep              # compare retrieval configurations
+uv run python -m labrag.cli eval --rerank      # with the cross-encoder pass
 uv run python -m labrag.cli answer-all --questions ... --out ...   # batch, to JSONL
 ```
 
@@ -256,16 +295,24 @@ it to a personal API key is a larger exposure than committing it would have been
 
 ## Known limitations
 
-- **Paraphrase and short documents.** A 60-token biography and a question that shares no
-  vocabulary with its source give neither retrieval leg much to work with. `paraphrase`
-  scores 0.333 and `people` 0.778 at success@6, and together they are most of the
-  retrieval loss. This needs length normalisation or a reranking pass.
+- **Paraphrase.** Three questions written to share no vocabulary at all with their
+  source documents score 0.333 at success@6, and nothing tried has moved them: not
+  reranking with either model, not a larger candidate pool. Both retrieval legs are
+  defeated by the same thing, so the next place to look is the embedding model rather than
+  the ranking.
+- **Reranking is not on by default, for latency rather than quality.** bge-reranker-base
+  takes 13.1 seconds a query on this CPU against 6.2 for generation. On a GPU that is tens
+  of milliseconds and it should simply be on.
 - **Fusion discards calibrated similarity.** Reciprocal rank fusion reads only ranks, so a
   chunk both legs place in their top handful beats a chunk one leg is certain about. On
   "what should I do if I stick myself with a needle" the correct entry has cosine 0.710
   against a wrong one's 0.498 and still comes second. Leg weights exist and are left at
-  1.0; measurement says weighting is the wrong tool and a cross-encoder reranker is the
-  right one.
+  1.0; measurement says weighting is the wrong tool and the reranker is the right one.
+- **The abstention gate reads cosine, and the reranker's score is better calibrated.**
+  `q047` has the right document at rank 4 and is still refused, because that document's
+  cosine is 0.498 against a threshold of 0.62. A gate on the reranker's score would have
+  the signal it needs, but those logits are not comparable across queries, so it is not a
+  drop-in substitution.
 - **The abstention threshold is a compromise, not a solution.** Answerable and
   unanswerable questions overlap in cosine, so no threshold separates them. 0.62 is where
   accuracy peaks, chosen on the same questions it is scored on, and the citation gate
@@ -285,10 +332,10 @@ The retrieval work this file used to list as future is done: structure-aware chu
 hybrid retrieval with rank fusion, validated citations, an abstention gate, and a labelled
 evaluation set. What the measurements now point at:
 
-1. A cross-encoder reranking pass over the fused candidates, which is what fusion's
-   discarded similarity signal calls for
-2. Document length normalisation, so short member and safety documents are not crowded out
-   by full-text paper sections
+1. Re-run generation with the reranker on, since the retrieval gain from it has not been
+   shown to reach the answers
+2. A larger embedding model, which is the only untried lever on `paraphrase` and the one
+   place reranking made things worse rather than better
 3. A second annotator on the evaluation set, so category-level numbers mean something
 4. The head-to-head against the original prompt-stuffing assistant, on the private corpus,
    through an approved endpoint
