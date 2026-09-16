@@ -35,6 +35,7 @@ from .evaluate import (  # noqa: E402
 )
 from .ingest import ingest_all  # noqa: E402
 from .prompts import ABSTENTION_TEMPLATE, build_messages  # noqa: E402
+from .rerank import DEFAULT_RERANK_MODEL, Reranker  # noqa: E402
 from .retriever import Retriever  # noqa: E402
 from .store import VectorStore  # noqa: E402
 
@@ -385,7 +386,21 @@ def _build(store, mode, args, weight_lexical=1.0):
     if mode in ("dense", "hybrid"):
         embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
     return Retriever(store, embedder=embedder, mode=mode, final_k=10,
-                     weight_lexical=weight_lexical)
+                     weight_lexical=weight_lexical,
+                     top_k_dense=getattr(args, "top_k_dense", 20),
+                     top_k_lexical=getattr(args, "top_k_lexical", 20),
+                     reranker=_reranker(args),
+                     rerank_candidates=getattr(args, "rerank_candidates", 40))
+
+
+def _reranker(args):
+    """One reranker for the whole run, so the model is loaded once rather than per query."""
+    if not getattr(args, "rerank", False):
+        return None
+    if not hasattr(args, "_reranker_cache"):
+        args._reranker_cache = Reranker(getattr(args, "rerank_model", None)
+                                        or DEFAULT_RERANK_MODEL)
+    return args._reranker_cache
 
 
 def cmd_eval(args) -> int:
@@ -513,16 +528,42 @@ def main(argv=None) -> int:
     p_search.add_argument("--explain", action="store_true", help="show per-leg ranks")
     p_search.add_argument("--full", action="store_true", help="print whole documents")
     p_search.add_argument("--no-linked", action="store_true", help="skip linked documents")
+    p_search.add_argument("--rerank", action="store_true",
+                        help="cross-encoder reranking pass over the fused candidates")
+    p_search.add_argument("--rerank-model", default=None,
+                        help=f"reranker model (default: {DEFAULT_RERANK_MODEL})")
+    p_search.add_argument("--rerank-candidates", type=int, default=40,
+                        help="how many fused candidates the reranker scores")
     p_search.set_defaults(func=cmd_search)
 
     p_eval = sub.add_parser("eval", help="score retrieval against the labeled question set")
     p_eval.add_argument("--questions", default=Path(cfg.REPO_ROOT) / "eval" / "questions.yaml")
     p_eval.add_argument("--mode", default="hybrid", choices=("dense", "bm25", "hybrid"))
     p_eval.add_argument("--failures", action="store_true", help="list total misses")
+    p_eval.add_argument("--top-k-dense", type=int, default=20,
+                        help="candidates the dense leg returns before fusion")
+    p_eval.add_argument("--top-k-lexical", type=int, default=20,
+                        help="candidates the lexical leg returns before fusion")
+    p_eval.add_argument("--rerank", action="store_true",
+                        help="cross-encoder reranking pass over the fused candidates")
+    p_eval.add_argument("--rerank-model", default=None,
+                        help=f"reranker model (default: {DEFAULT_RERANK_MODEL})")
+    p_eval.add_argument("--rerank-candidates", type=int, default=40,
+                        help="how many fused candidates the reranker scores")
     p_eval.set_defaults(func=cmd_eval)
 
     p_sweep = sub.add_parser("sweep", help="compare retrieval configurations")
     p_sweep.add_argument("--questions", default=Path(cfg.REPO_ROOT) / "eval" / "questions.yaml")
+    p_sweep.add_argument("--top-k-dense", type=int, default=20,
+                        help="candidates the dense leg returns before fusion")
+    p_sweep.add_argument("--top-k-lexical", type=int, default=20,
+                        help="candidates the lexical leg returns before fusion")
+    p_sweep.add_argument("--rerank", action="store_true",
+                        help="cross-encoder reranking pass over the fused candidates")
+    p_sweep.add_argument("--rerank-model", default=None,
+                        help=f"reranker model (default: {DEFAULT_RERANK_MODEL})")
+    p_sweep.add_argument("--rerank-candidates", type=int, default=40,
+                        help="how many fused candidates the reranker scores")
     p_sweep.set_defaults(func=cmd_sweep)
 
     p_ask = sub.add_parser("ask", help="retrieve, gate, and answer")
@@ -548,6 +589,12 @@ def main(argv=None) -> int:
     p_ask.add_argument("--reasoning-effort", default=None,
                        choices=("minimal", "low", "medium", "high"),
                        help="reasoning models only; omitted means the endpoint default")
+    p_ask.add_argument("--rerank", action="store_true",
+                        help="cross-encoder reranking pass over the fused candidates")
+    p_ask.add_argument("--rerank-model", default=None,
+                        help=f"reranker model (default: {DEFAULT_RERANK_MODEL})")
+    p_ask.add_argument("--rerank-candidates", type=int, default=40,
+                        help="how many fused candidates the reranker scores")
     p_ask.set_defaults(func=cmd_ask)
 
     p_self = sub.add_parser("selftest", help="send one prompt, to check the endpoint")
@@ -576,6 +623,12 @@ def main(argv=None) -> int:
     p_all.add_argument("--max-tokens", type=int, default=2500)
     p_all.add_argument("--reasoning-effort", default=None,
                        choices=("minimal", "low", "medium", "high"))
+    p_all.add_argument("--rerank", action="store_true",
+                        help="cross-encoder reranking pass over the fused candidates")
+    p_all.add_argument("--rerank-model", default=None,
+                        help=f"reranker model (default: {DEFAULT_RERANK_MODEL})")
+    p_all.add_argument("--rerank-candidates", type=int, default=40,
+                        help="how many fused candidates the reranker scores")
     p_all.set_defaults(func=cmd_answer_all)
 
     args = parser.parse_args(argv)

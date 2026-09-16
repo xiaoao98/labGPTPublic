@@ -87,6 +87,9 @@ class ChunkHit:
     dense_score: float | None = None
     lexical_rank: int | None = None
     lexical_score: float | None = None
+    rerank_score: float | None = None
+    #: Row of this chunk in the index, so its vector can be fetched without a lookup.
+    chunk_row: int | None = None
 
     @property
     def found_by(self) -> str:
@@ -100,8 +103,16 @@ class ChunkHit:
     def confidence(self) -> float:
         """The calibrated signal for abstention. Cosine, never the fused score.
 
-        A chunk found only by BM25 has no cosine, so it reports 0.0 here rather than
-        inventing one. Phase 3 decides what to do about that.
+        A chunk BM25 found and the dense leg did not used to report 0.0 here, on the
+        grounds that it had no cosine and inventing one would be worse. That left the
+        abstention gate blind to exactly those chunks: it thresholds on the best cosine
+        across the hits, so a correct document found only by term overlap contributed
+        nothing and could not save a question from being refused. One did. The right
+        document sat at rank 4 with a cosine of 0.000 while the gate compared 0.577
+        against 0.62 and declined to answer.
+
+        The cosine was never missing, only uncomputed. Both sides are unit vectors and the
+        chunk's row is in the index, so it is one dot product, filled in after fusion.
         """
         return self.dense_score if self.dense_score is not None else 0.0
 
@@ -130,6 +141,8 @@ class Retriever:
         final_k: int = 6,
         weight_dense: float = 1.0,
         weight_lexical: float = 1.0,
+        reranker=None,
+        rerank_candidates: int = 40,
     ):
         if mode not in ("dense", "bm25", "hybrid"):
             raise ValueError(f"mode must be dense, bm25 or hybrid, got {mode!r}")
@@ -145,6 +158,8 @@ class Retriever:
         self.final_k = final_k
         self.weight_dense = weight_dense
         self.weight_lexical = weight_lexical
+        self.reranker = reranker
+        self.rerank_candidates = rerank_candidates
 
         # The lexical index is built over the same text that was embedded, breadcrumb
         # included, so both legs see identical inputs and their ranks are comparable.
@@ -154,9 +169,27 @@ class Retriever:
 
     # -- legs --
 
-    def _dense(self, query: str, doc_types=None):
-        vector = self.embedder.encode_query(query)
+    def _dense(self, vector, doc_types=None):
         return self.store.search_dense(vector, self.top_k_dense, doc_types=doc_types)
+
+    def _fill_cosines(self, vector, hits) -> None:
+        """Give every hit its cosine, including the ones only BM25 found.
+
+        The dense leg returns its own top k, so anything below that cut arrives here with
+        dense_score unset even though the vector for it is sitting in the index. One dot
+        product per gap, over at most a few dozen chunks, and the abstention gate stops
+        being blind to the lexical leg.
+        """
+        import numpy as np
+
+        missing = [h for h in hits if h.dense_score is None]
+        if not missing:
+            return
+        query = np.asarray(vector, dtype="float32").reshape(-1)
+        for hit in missing:
+            if hit.chunk_row is None:
+                continue
+            hit.dense_score = float(self.store.vectors[hit.chunk_row] @ query)
 
     def _lexical(self, query: str, doc_types=None):
         allowed = None
@@ -182,6 +215,7 @@ class Retriever:
         hits = [
             ChunkHit(
                 chunk=self.store.chunks[index],
+                chunk_row=index,
                 fused_score=score,
                 dense_rank=dense_rank.get(index),
                 dense_score=dense_score.get(index),
@@ -195,21 +229,61 @@ class Retriever:
         hits.sort(key=lambda h: (-h.fused_score, -h.confidence, h.chunk.chunk_id))
         return hits
 
+    def _rerank(self, query: str, hits: list[ChunkHit]) -> list[ChunkHit]:
+        """Re-sort the shortlist with a cross-encoder, leaving the tail where it was.
+
+        Scored on embed_text rather than the bare chunk, so the reranker sees the same
+        breadcrumb the index was built from. A 60-token member biography is most of what
+        that category has, and the line naming the document it came from is a real part of
+        the evidence rather than decoration.
+
+        Only the first rerank_candidates are scored and they keep their positions ahead of
+        everything unscored, so the pass reorders a shortlist and never promotes out of the
+        tail. The cosine carried on each hit is left untouched: it is what the abstention
+        gate thresholds on, and a logit from this model is not on that scale.
+        """
+        head, tail = hits[: self.rerank_candidates], hits[self.rerank_candidates:]
+        if not head:
+            return hits
+        scores = self.reranker.score(query, [h.chunk.embed_text for h in head])
+        for hit, score in zip(head, scores):
+            hit.rerank_score = score
+        head.sort(key=lambda h: (-h.rerank_score, h.chunk.chunk_id))
+        return head + tail
+
     # -- entry point --
 
     def retrieve(self, query: str, k: int | None = None, doc_types=None,
                  include_linked: bool = True) -> RetrievalResult:
         k = k or self.final_k
 
-        dense = self._dense(query, doc_types) if self.mode in ("dense", "hybrid") else []
+        vector = None
+        if self.mode in ("dense", "hybrid"):
+            vector = self.embedder.encode_query(query)
+        dense = self._dense(vector, doc_types) if vector is not None else []
         lexical = self._lexical(query, doc_types) if self.mode in ("bm25", "hybrid") else []
 
         hits = self._fuse(dense, lexical)
+        if vector is not None:
+            self._fill_cosines(vector, hits)
+        if self.reranker is not None:
+            hits = self._rerank(query, hits)
 
         # Expand a few more chunks than requested, because several chunks of one
         # document collapse into a single result and would otherwise short the list.
+        # expand_hits sorts documents by the score handed to it, so the score has to carry
+        # the order that is meant. After a reranking pass that is the reranked position,
+        # not the fused score: passing fused_score here re-sorted the documents by the very
+        # signal the reranker had just overruled, and the pass had no visible effect at all
+        # while appearing to run. Rank rather than logit, because the two scales do not mix
+        # and only some candidates are scored.
+        head = hits[: max(k * 3, self.top_k_dense)]
+        if self.reranker is not None:
+            scored = [(h.chunk, float(-index)) for index, h in enumerate(head)]
+        else:
+            scored = [(h.chunk, h.fused_score) for h in head]
         documents = expand_hits(
-            [(h.chunk, h.fused_score) for h in hits[: max(k * 3, self.top_k_dense)]],
+            scored,
             self.store.documents,
             include_linked=include_linked,
             limit=k,

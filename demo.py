@@ -8,7 +8,6 @@ It used to classify a query three ways and then paste whole corpora into the pro
       safety   -> the entire safety corpus
       protocol -> an LLM picks an experiment name from a list, SQL fetches that one row
       papers   -> the entire abstract index, and an LLM returns five ids from it
-      members  -> the entire directory, on every query, unconditionally
     -> one very large prompt -> generate
 
 On the real corpus a paper question assembled tens of thousands of tokens before
@@ -60,31 +59,21 @@ MAX_NEW_TOKENS_ANSWER = 1024  # the user-facing answer
 # "who can help" behaviour the original prompt asked for, and a people question cannot
 # fill every slot with colleagues.
 TOP_K = 6
-TOP_K_MEMBERS = 2
 
-# A retrieved person is only appended above this cosine. Filtering to the directory means
-# the search always returns somebody, so without a floor a question about freezing medium
-# gets two arbitrary postdocs attached and the model, told to name who can help, names
-# them.
+# There used to be a second, directory-filtered retrieval here that appended two people to
+# every answer, with a cosine floor to stop it attaching arbitrary postdocs to questions
+# about freezing medium. It is gone, and this loop now retrieves exactly the way
+# labrag.cli does.
 #
-# Measured on the top members retrieved, before and after bios were chunked by sentence:
+# Removing it costs something real and the number is known. Filtered to the 37 member
+# documents, the correct person is in the top two for all nine people questions in the
+# evaluation set; through the general search they reach success@6 of 0.778. The special
+# case was carrying that category.
 #
-#                                                      whole bio   chunked
-#   "who runs the flow cytometry platforms"  Shreyasee     0.566     0.662  right
-#   "who should I ask about ordering reagents" Michelle    0.516     0.543  right
-#   "  (the same query)"                       Aman        0.557     0.564  wrong
-#   "what freezing medium is used for BJ cells" anyone     0.538     0.602  wrong
-#
-# Chunking lifted every member score, signal and noise alike, so the floor had to rise
-# with it; at 0.55 it now admits everybody. At 0.62 it keeps Shreyasee, drops the
-# freezing-medium case, and on the reagents question admits nobody rather than the wrong
-# person, which is the better of the two outcomes available.
-#
-# It is still not a relevance test. On that reagents question the correct person scores
-# below an incorrect one on cosine, so the floor cannot separate them; only the fused
-# ranking gets Michelle to the top, and that is because BM25 matches "reagents" in her
-# bio. This rejects the obviously unrelated and does no more.
-MEMBER_FLOOR = DEFAULT_ABSTAIN_COSINE
+# It goes anyway because two retrieval behaviours in one repository means the measured
+# system and the shipped system are not the same system, and every figure in the README
+# was measured on this path rather than on the one with the extra channel. A weakness that
+# shows up in the numbers can be worked on; one that a special case hides cannot.
 
 INDEX_DIR = os.environ.get("LABGPT_INDEX_DIR", str(cfg.REPO_ROOT / ".index"))
 
@@ -147,12 +136,6 @@ def answer_query(query, retriever, tokenizer, model) -> None:
 
     # --- retrieve -------------------------------------------------------------
     result = retriever.retrieve(query, k=TOP_K)
-    # Filtered to the directory, so this always returns somebody: it hands back the two
-    # least-bad people whether or not either is relevant. Asked about freezing medium it
-    # will cheerfully produce two postdocs who have nothing to do with cryopreservation,
-    # and the model, told to name who can help, will name them. Hence the floor below.
-    members = retriever.retrieve(query, k=TOP_K_MEMBERS, doc_types=["member"],
-                                 include_linked=False)
 
     abstain, reason = should_abstain(result, DEFAULT_ABSTAIN_COSINE)
     rprint(f"[dim]best match {result.best_cosine:.3f}, "
@@ -173,20 +156,6 @@ def answer_query(query, retriever, tokenizer, model) -> None:
 
     # The directory is appended rather than competing for the main slots, so that the
     # "tell them who can help" behaviour survives without paying for the whole of it.
-    # Only people who actually match are appended: a weak match is worse than none,
-    # because the prompt asks the model to name someone and it will name whoever is here.
-    #
-    # The floor is on the cosine, not on Retrieved.score, which is the fused RRF value.
-    # RRF encodes rank rather than similarity, so the top result of a search that matched
-    # nothing still scores highly and a floor on it would never reject anybody.
-    relevant = {
-        hit.chunk.doc_id for hit in members.chunk_hits if hit.confidence >= MEMBER_FLOOR
-    }
-    seen = {item.document.doc_id for item in sources}
-    for item in members.documents:
-        if item.document.doc_id in relevant and item.document.doc_id not in seen:
-            sources.append(item)
-
     for number, item in enumerate(sources, start=1):
         rprint(f"[dim]  [S{number}] {item.document.doc_type:<14} "
                f"{item.document.title[:62]}[/dim]")
