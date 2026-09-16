@@ -198,6 +198,38 @@ def _client(args):
                       reasoning_effort=args.reasoning_effort)
 
 
+def _oracle_documents(retriever, store, question, k):
+    """The k slots the model is given, with the labelled documents put into them.
+
+    Gold first, then the highest ranked documents retrieval actually found, until the
+    slots are full. Holding the slot count at k is the point: production gives the model
+    k documents, so an oracle that handed it twenty would be measuring context length as
+    well as retrieval, and the two could not be told apart afterwards.
+
+    Four questions carry more gold than fits. Their gold is redundant rather than
+    enumerative, nineteen documents naming the same Cre drivers and seven naming the same
+    implantation site, so six of them is a complete answer and the cut changes nothing the
+    model could say.
+    """
+    from .documents import Retrieved
+
+    picked, seen = [], set()
+    for doc_id in question.relevant[:k]:
+        document = store.documents.get(doc_id)
+        if document is None:
+            continue
+        picked.append(Retrieved(document=document, score=1.0))
+        seen.add(doc_id)
+    if len(picked) < k:
+        for item in retriever.retrieve(question.question, k=k).documents:
+            if len(picked) >= k:
+                break
+            if item.document.doc_id not in seen:
+                picked.append(item)
+                seen.add(item.document.doc_id)
+    return picked
+
+
 def cmd_selftest(args) -> int:
     """One trivial prompt, to prove the endpoint works before a batch is committed to it.
 
@@ -266,6 +298,12 @@ def cmd_answer_all(args) -> int:
         questions = [q for q in questions if q.id not in done]
         print(f"resuming: {len(done)} answered, {failed} to retry, "
               f"{len(questions)} to do")
+    if args.oracle:
+        dropped = [q for q in questions if q.should_abstain]
+        questions = [q for q in questions if not q.should_abstain]
+        if dropped:
+            print(f"oracle: skipping {len(dropped)} unanswerable questions, "
+                  f"which have no gold documents to supply")
     if args.limit:
         questions = questions[: args.limit]
     if not questions:
@@ -289,10 +327,13 @@ def cmd_answer_all(args) -> int:
                   f"{question.question[:52]}   (eta {eta:.0f} min)")
             record = {"id": question.id, "category": question.category,
                       "should_abstain": question.should_abstain,
-                      "question": question.question, "system": "new-rag"}
+                      "question": question.question,
+                      "system": "oracle-context" if args.oracle else "new-rag"}
             one = time.perf_counter()
             try:
-                answer = answerer.answer(question.question)
+                oracle = (_oracle_documents(retriever, store, question, args.k)
+                          if args.oracle else None)
+                answer = answerer.answer(question.question, documents=oracle)
                 record.update(answer.to_dict())
                 # Flattened out of usage so the cost of a run can be read without
                 # digging: reasoning tokens are billed as completion tokens but are
@@ -526,6 +567,10 @@ def main(argv=None) -> int:
     p_all.add_argument("--only", help="comma-separated question ids")
     p_all.add_argument("--resume", action="store_true",
                        help="append, skipping ids already in --out")
+    p_all.add_argument("--oracle", action="store_true",
+                       help="fill the k slots with the labelled documents, bypassing the "
+                            "confidence gate, to measure the generator with retrieval held "
+                            "perfect")
     p_all.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
     p_all.add_argument("--base-url", default=None)
     p_all.add_argument("--max-tokens", type=int, default=2500)

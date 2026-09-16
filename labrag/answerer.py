@@ -400,21 +400,31 @@ class Answerer:
         self.k = k
         self.abstain_cosine = abstain_cosine
 
-    def answer(self, question: str) -> Answer:
-        started = time.perf_counter()
-        result = self.retriever.retrieve(question, k=self.k)
+    def answer(self, question: str, documents=None) -> Answer:
+        """Answer from retrieval, or from documents the caller supplies.
 
-        abstain, reason = should_abstain(result, self.abstain_cosine)
-        if abstain:
-            return Answer(
-                question=question,
-                text=ABSTENTION_TEMPLATE.format(reason=f"Reason: {reason}."),
-                abstained=True,
-                reason=reason,
-                retrieved=result.documents,
-                best_cosine=result.best_cosine,
-                latency_ms=_elapsed(started),
-            )
+        Passing documents is the oracle path. It skips retrieval and skips the confidence
+        gate, because the gate is a judgement about retrieval and retrieval is the thing
+        being held fixed. The citation gate below still applies: it judges the answer, not
+        the search, and an answer with no usable provenance is withheld either way.
+        """
+        started = time.perf_counter()
+        if documents is None:
+            result = self.retriever.retrieve(question, k=self.k)
+            abstain, reason = should_abstain(result, self.abstain_cosine)
+            if abstain:
+                return Answer(
+                    question=question,
+                    text=ABSTENTION_TEMPLATE.format(reason=f"Reason: {reason}."),
+                    abstained=True,
+                    reason=reason,
+                    retrieved=result.documents,
+                    best_cosine=result.best_cosine,
+                    latency_ms=_elapsed(started),
+                )
+            served, cosine = result.documents, result.best_cosine
+        else:
+            served, cosine = list(documents), 0.0
 
         if self.client is None:
             raise LLMError(
@@ -423,8 +433,8 @@ class Answerer:
                 "to see the assembled prompt without calling a model."
             )
 
-        text, usage = self.client.complete(build_messages(question, result.documents))
-        valid, invalid = validate_citations(text, len(result.documents))
+        text, usage = self.client.complete(build_messages(question, served))
+        valid, invalid = validate_citations(text, len(served))
 
         if not valid:
             # An answer with no usable provenance is indistinguishable from a
@@ -436,9 +446,9 @@ class Answerer:
                            "back to an indexed document, so it was withheld."),
                 abstained=True,
                 reason="no valid citation in the generated answer",
-                retrieved=result.documents,
+                retrieved=served,
                 invalid_citations=invalid,
-                best_cosine=result.best_cosine,
+                best_cosine=cosine,
                 latency_ms=_elapsed(started),
                 usage=usage,
             )
@@ -447,11 +457,11 @@ class Answerer:
             question=question,
             text=text,
             abstained=False,
-            retrieved=result.documents,
+            retrieved=served,
             cited=valid,
             invalid_citations=invalid,
             uncited_sentences=count_uncited_sentences(text),
-            best_cosine=result.best_cosine,
+            best_cosine=cosine,
             latency_ms=_elapsed(started),
             usage=usage,
         )
