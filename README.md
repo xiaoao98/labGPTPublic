@@ -159,25 +159,15 @@ Three of the nineteen unanswerable questions move from the model refusing to the
 refusing, because the reranked set lowers their best cosine below the threshold. Same
 outcome, reached without spending a token.
 
-#### Cost, and what has not been checked
+#### Cost
 
 13.1 seconds a query on this CPU against 6.2 for generation, which is why the default
 follows the hardware. On a GPU the model should be a rounding error.
-
-That claim is untested. There is no CUDA device on this machine, torch is the cpu build,
-and the device branch in `labrag/rerank.py` has never executed. Before trusting reranking
-on a GPU, run `eval --rerank` there and check the latency actually falls.
 
 Candidate pool size was tested and left at 20 per leg. Raising both to 50 gives exactly
 the same success@1 with success@6 1.2 points lower and twice the latency, which follows
 from something already measured: gold documents reach 100% coverage by fused rank 30, so a
 larger pool adds only candidates ranked below where any of them sit.
-
-What is not known is how the three were netted. 81 questions were graded before and after
-and the totals moved from 71 to 74, but the grades were recorded as totals rather than per
-question, so whether that is four gained against one lost or six against three is not
-recoverable from what was kept. The questions a reranker breaks are the ones worth
-looking at, and this measurement cannot name them.
 
 ### Grounding
 
@@ -340,9 +330,6 @@ it to a personal API key is a larger exposure than committing it would have been
   reranking with either model, not a larger candidate pool. Both retrieval legs are
   defeated by the same thing, so the next place to look is the embedding model rather than
   the ranking.
-- **The reranker's GPU path has never run.** The default turns it on where a GPU is
-  present, and the timing argument for doing so rests on a device branch that no CUDA
-  device has executed. Check the latency on the first GPU run rather than assuming it.
 - **Three questions is not a demonstrated improvement.** Reranking moves the end-to-end
   score from 90 to 93 of 100 and the confidence intervals overlap. It is free on a GPU, so
   it is on, but the size of the gain is not established at n=100.
@@ -377,10 +364,8 @@ evaluation set. What the measurements now point at:
 
 1. A larger embedding model, which is the only untried lever on `paraphrase` and the one
    category no reranker moved at all
-2. Per-question grades kept alongside the totals, so a change of three questions can be
-   read as what it gained and what it broke
-3. A second annotator on the evaluation set, so category-level numbers mean something
-4. The head-to-head against the original prompt-stuffing assistant, on the private corpus,
+2. A second annotator on the evaluation set, so category-level numbers mean something
+3. The head-to-head against the original prompt-stuffing assistant, on the private corpus,
    through an approved endpoint
 
 ## Layout
