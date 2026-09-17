@@ -53,8 +53,19 @@ that the document actually contains the answer its note claims. Generation by gp
 reasoning effort, six documents per query. Every answer was then read and graded by a
 person.
 
-**End to end, 90 of 100 correct.** 71 of the 81 answerable questions answered correctly,
-and all 19 unanswerable ones refused without inventing anything.
+**End to end, 90 of 100 correct, or 93 with the reranker on.** Both were graded by
+reading every answer.
+
+| | answerable, 81 | unanswerable, 19 | total |
+|---|---|---|---|
+| default | 71 | 19 | **90 / 100** |
+| with reranker | 74 | 19 | **93 / 100** |
+| oracle context | 80 | not applicable | — |
+
+Which of the two runs the default is decided by the hardware: reranking is on where it is
+cheap and off where it is not, and `eval` prints which one produced a given table. The
+nineteen unanswerable questions are refused either way, with nothing invented in either
+run.
 
 ### Where the failures come from
 
@@ -103,9 +114,12 @@ legs plenty.
 
 ### Reranking
 
-A cross-encoder pass over the fused candidates, off by default, `--rerank`. It exists
-because fusion reads ranks and discards scores, so a document one leg is certain about
-loses to one both legs merely like.
+A cross-encoder pass over the fused candidates. It exists because fusion reads ranks and
+discards scores, so a document one leg is certain about loses to one both legs merely
+like.
+
+On by default where a GPU is present and off where it is not, since that is the whole of
+the argument either way; `--rerank` and `--no-rerank` override.
 
 | | success@1 | success@6 | nDCG@10 | seconds per query |
 |---|---|---|---|---|
@@ -123,21 +137,47 @@ success@1. `people` goes from 0.333 to 0.889 at success@1.
 So the first reading, that reranking helps ordering but costs safety, was a property of
 the small model rather than of reranking.
 
-Two things this does not fix. `paraphrase` stays at 0.333 under every configuration tried,
-because three questions written to share no vocabulary with their sources defeat the
-cross-encoder as thoroughly as they defeat the bi-encoder. And 13.1 seconds a query on
-this CPU is more than the generation step itself at 6.2; on a GPU this model runs in tens
-of milliseconds and the trade disappears, which is why it is available rather than
-default.
+`paraphrase` stays at 0.333 under every configuration tried. Three questions written to
+share no vocabulary with their sources defeat the cross-encoder as thoroughly as they
+defeat the bi-encoder, so what remains of the retrieval loss is not a ranking problem.
+
+#### What it is worth end to end
+
+Three questions in a hundred. 71 correct of 81 answerable without it, 74 with, against 80
+for the oracle context, so it recovers a third of the nine failures the oracle run
+attributes to retrieval. The intervals overlap, 0.841-0.959 against 0.880-0.980, so the
+direction holds and the size does not at this sample size.
+
+Retrieval moves much further than the answers do, success@1 from 0.469 to 0.802 against
+three questions changing, and the reason was measured rather than guessed. The reranker
+changes the six documents served on 76 of the 81 questions, but on 73 of those the
+documents that came and went contain no answer either way: the gold document was already
+there and the model could already use it. Only three questions gain a gold document they
+did not have, and none lose one.
+
+Three of the nineteen unanswerable questions move from the model refusing to the gate
+refusing, because the reranked set lowers their best cosine below the threshold. Same
+outcome, reached without spending a token.
+
+#### Cost, and what has not been checked
+
+13.1 seconds a query on this CPU against 6.2 for generation, which is why the default
+follows the hardware. On a GPU the model should be a rounding error.
+
+That claim is untested. There is no CUDA device on this machine, torch is the cpu build,
+and the device branch in `labrag/rerank.py` has never executed. Before trusting reranking
+on a GPU, run `eval --rerank` there and check the latency actually falls.
 
 Candidate pool size was tested and left at 20 per leg. Raising both to 50 gives exactly
 the same success@1 with success@6 1.2 points lower and twice the latency, which follows
 from something already measured: gold documents reach 100% coverage by fused rank 30, so a
 larger pool adds only candidates ranked below where any of them sit.
 
-**The end-to-end figures above are the unreranked configuration.** Generation has not been
-re-run with the reranker on, so 90 of 100 is what the default pipeline scores and the
-retrieval gain has not been shown to carry through to answers.
+What is not known is how the three were netted. 81 questions were graded before and after
+and the totals moved from 71 to 74, but the grades were recorded as totals rather than per
+question, so whether that is four gained against one lost or six against three is not
+recoverable from what was kept. The questions a reranker breaks are the ones worth
+looking at, and this measurement cannot name them.
 
 ### Grounding
 
@@ -300,9 +340,12 @@ it to a personal API key is a larger exposure than committing it would have been
   reranking with either model, not a larger candidate pool. Both retrieval legs are
   defeated by the same thing, so the next place to look is the embedding model rather than
   the ranking.
-- **Reranking is not on by default, for latency rather than quality.** bge-reranker-base
-  takes 13.1 seconds a query on this CPU against 6.2 for generation. On a GPU that is tens
-  of milliseconds and it should simply be on.
+- **The reranker's GPU path has never run.** The default turns it on where a GPU is
+  present, and the timing argument for doing so rests on a device branch that no CUDA
+  device has executed. Check the latency on the first GPU run rather than assuming it.
+- **Three questions is not a demonstrated improvement.** Reranking moves the end-to-end
+  score from 90 to 93 of 100 and the confidence intervals overlap. It is free on a GPU, so
+  it is on, but the size of the gain is not established at n=100.
 - **Fusion discards calibrated similarity.** Reciprocal rank fusion reads only ranks, so a
   chunk both legs place in their top handful beats a chunk one leg is certain about. On
   "what should I do if I stick myself with a needle" the correct entry has cosine 0.710
@@ -332,10 +375,10 @@ The retrieval work this file used to list as future is done: structure-aware chu
 hybrid retrieval with rank fusion, validated citations, an abstention gate, and a labelled
 evaluation set. What the measurements now point at:
 
-1. Re-run generation with the reranker on, since the retrieval gain from it has not been
-   shown to reach the answers
-2. A larger embedding model, which is the only untried lever on `paraphrase` and the one
-   place reranking made things worse rather than better
+1. A larger embedding model, which is the only untried lever on `paraphrase` and the one
+   category no reranker moved at all
+2. Per-question grades kept alongside the totals, so a change of three questions can be
+   read as what it gained and what it broke
 3. A second annotator on the evaluation set, so category-level numbers mean something
 4. The head-to-head against the original prompt-stuffing assistant, on the private corpus,
    through an approved endpoint
