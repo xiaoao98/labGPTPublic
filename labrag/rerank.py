@@ -40,14 +40,42 @@ from __future__ import annotations
 DEFAULT_RERANK_MODEL = "BAAI/bge-reranker-base"
 
 
+def _best_device() -> str:
+    """Where to run the cross-encoder.
+
+    This decides whether the pass is affordable at all. On the CPU in this repository's
+    development machine bge-reranker-base takes 13.1 seconds a query against 6.2 for
+    generation, which is why reranking is not unconditionally on. On a GPU the same model
+    is a rounding error, and the trade stops existing.
+
+    NOT VERIFIED ON A GPU. There is no CUDA device here, so the cuda branch is written
+    from the API and has never executed.
+    """
+    try:
+        import torch
+    except ImportError:
+        return "cpu"
+    if torch.cuda.is_available():
+        return "cuda"
+    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def rerank_is_cheap() -> bool:
+    """Whether a reranking pass costs little enough to be on without being asked for."""
+    return _best_device() != "cpu"
+
+
 class Reranker:
     """Scores (query, passage) pairs with a cross-encoder. Loads on first use."""
 
     def __init__(self, model_name: str = DEFAULT_RERANK_MODEL, batch_size: int = 32,
-                 max_length: int = 512):
+                 max_length: int = 512, device: str | None = None):
         self.model_name = model_name
         self.batch_size = batch_size
         self.max_length = max_length
+        self.device = device or _best_device()
         self._tok = None
         self._model = None
 
@@ -60,9 +88,10 @@ class Reranker:
             raise RuntimeError(
                 "reranking needs transformers.\n  pip install transformers"
             ) from exc
-        print(f"loading reranker {self.model_name} ...")
+        print(f"loading reranker {self.model_name} on {self.device} ...")
         self._tok = AutoTokenizer.from_pretrained(self.model_name)
         self._model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
+        self._model.to(self.device)
         self._model.eval()
 
     def score(self, query: str, passages: list[str]) -> list[float]:
@@ -78,7 +107,8 @@ class Reranker:
             encoded = self._tok([query] * len(batch), batch, padding=True,
                                 truncation=True, max_length=self.max_length,
                                 return_tensors="pt")
+            encoded = {k: v.to(self.device) for k, v in encoded.items()}
             with torch.no_grad():
-                logits = self._model(**encoded).logits.view(-1)
+                logits = self._model(**encoded).logits.view(-1).cpu()
             out.extend(float(x) for x in logits)
         return out

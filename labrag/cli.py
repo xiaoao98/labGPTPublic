@@ -35,7 +35,9 @@ from .evaluate import (  # noqa: E402
 )
 from .ingest import ingest_all  # noqa: E402
 from .prompts import ABSTENTION_TEMPLATE, build_messages  # noqa: E402
-from .rerank import DEFAULT_RERANK_MODEL, Reranker  # noqa: E402
+from .rerank import (  # noqa: E402
+    DEFAULT_RERANK_MODEL, Reranker, _best_device, rerank_is_cheap,
+)
 from .retriever import Retriever  # noqa: E402
 from .store import VectorStore  # noqa: E402
 
@@ -397,9 +399,23 @@ def _build(store, mode, args, weight_lexical=1.0):
                      rerank_candidates=getattr(args, "rerank_candidates", 40))
 
 
+def _rerank_wanted(args) -> bool:
+    """Whether to rerank, with the default decided by the hardware.
+
+    The pass is worth roughly three end-to-end questions in a hundred and costs 13.1
+    seconds a query on a CPU against 6.2 for generation, so on a CPU it is a bad default
+    and on a GPU it is a free one. --rerank and --no-rerank both override.
+    """
+    if getattr(args, "no_rerank", False):
+        return False
+    if getattr(args, "rerank", False):
+        return True
+    return rerank_is_cheap()
+
+
 def _reranker(args):
     """One reranker for the whole run, so the model is loaded once rather than per query."""
-    if not getattr(args, "rerank", False):
+    if not _rerank_wanted(args):
         return None
     if not hasattr(args, "_reranker_cache"):
         args._reranker_cache = Reranker(getattr(args, "rerank_model", None)
@@ -420,6 +436,11 @@ def cmd_eval(args) -> int:
           f"{len(store.chunks)} chunks\n")
 
     results = evaluate(_build(store, args.mode, args), questions)
+    if _rerank_wanted(args):
+        print(f"reranking with {getattr(args, 'rerank_model', None) or DEFAULT_RERANK_MODEL} "
+              f"on {_best_device()}")
+    else:
+        print("no reranking")
     print(HEADER)
     print("-" * len(HEADER))
     print(f"{'OVERALL':<22}{_fmt(aggregate(results))}")
@@ -467,6 +488,11 @@ def cmd_sweep(args) -> int:
         ("hybrid w_lex=0.25", "hybrid", 0.25),
     ]
     print(f"{len(questions)} questions, {len(store.documents)} documents\n")
+    if _rerank_wanted(args):
+        print(f"reranking with {getattr(args, 'rerank_model', None) or DEFAULT_RERANK_MODEL} "
+              f"on {_best_device()}")
+    else:
+        print("no reranking")
     print(HEADER)
     print("-" * len(HEADER))
 
@@ -532,6 +558,8 @@ def main(argv=None) -> int:
     p_search.add_argument("--explain", action="store_true", help="show per-leg ranks")
     p_search.add_argument("--full", action="store_true", help="print whole documents")
     p_search.add_argument("--no-linked", action="store_true", help="skip linked documents")
+    p_search.add_argument("--no-rerank", action="store_true",
+                        help="skip the reranking pass even where it is cheap")
     p_search.add_argument("--rerank", action="store_true",
                         help="cross-encoder reranking pass over the fused candidates")
     p_search.add_argument("--rerank-model", default=None,
@@ -548,6 +576,8 @@ def main(argv=None) -> int:
                         help="candidates the dense leg returns before fusion")
     p_eval.add_argument("--top-k-lexical", type=int, default=20,
                         help="candidates the lexical leg returns before fusion")
+    p_eval.add_argument("--no-rerank", action="store_true",
+                        help="skip the reranking pass even where it is cheap")
     p_eval.add_argument("--rerank", action="store_true",
                         help="cross-encoder reranking pass over the fused candidates")
     p_eval.add_argument("--rerank-model", default=None,
@@ -562,6 +592,8 @@ def main(argv=None) -> int:
                         help="candidates the dense leg returns before fusion")
     p_sweep.add_argument("--top-k-lexical", type=int, default=20,
                         help="candidates the lexical leg returns before fusion")
+    p_sweep.add_argument("--no-rerank", action="store_true",
+                        help="skip the reranking pass even where it is cheap")
     p_sweep.add_argument("--rerank", action="store_true",
                         help="cross-encoder reranking pass over the fused candidates")
     p_sweep.add_argument("--rerank-model", default=None,
@@ -593,6 +625,8 @@ def main(argv=None) -> int:
     p_ask.add_argument("--reasoning-effort", default=None,
                        choices=("minimal", "low", "medium", "high"),
                        help="reasoning models only; omitted means the endpoint default")
+    p_ask.add_argument("--no-rerank", action="store_true",
+                        help="skip the reranking pass even where it is cheap")
     p_ask.add_argument("--rerank", action="store_true",
                         help="cross-encoder reranking pass over the fused candidates")
     p_ask.add_argument("--rerank-model", default=None,
@@ -627,6 +661,8 @@ def main(argv=None) -> int:
     p_all.add_argument("--max-tokens", type=int, default=2500)
     p_all.add_argument("--reasoning-effort", default=None,
                        choices=("minimal", "low", "medium", "high"))
+    p_all.add_argument("--no-rerank", action="store_true",
+                        help="skip the reranking pass even where it is cheap")
     p_all.add_argument("--rerank", action="store_true",
                         help="cross-encoder reranking pass over the fused candidates")
     p_all.add_argument("--rerank-model", default=None,
