@@ -344,54 +344,6 @@ class ChatClient:
         return content, body.get("usage", {})
 
 
-class TransformersChatClient:
-    """A locally loaded transformers model, behind the same interface as ChatClient.
-
-    demo.py runs an open-weights model on the machine itself, which is the whole reason
-    the corpus can stay institutional. Answerer only needs `.complete(messages)`, so the
-    local and hosted paths are interchangeable and nothing downstream knows which is in
-    use.
-
-    The tokenizer and model are passed in rather than loaded here, because loading a 32B
-    model takes minutes and demo.py already holds one for the classifier call.
-    """
-
-    def __init__(self, tokenizer, model, max_new_tokens: int = 1024,
-                 thinking: bool = True, streamer=None):
-        self.tokenizer = tokenizer
-        self.model = model
-        self.max_new_tokens = max_new_tokens
-        self.thinking = thinking
-        self.streamer = streamer
-
-    def complete(self, messages) -> tuple[str, dict]:
-        text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True,
-            enable_thinking=self.thinking,
-        )
-        inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
-        generated = self.model.generate(
-            **inputs, max_new_tokens=self.max_new_tokens,
-            do_sample=False, streamer=self.streamer,
-        )
-        new_tokens = generated[0][len(inputs.input_ids[0]):]
-        answer = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
-
-        # A thinking model emits its reasoning before </think>; only what follows is the
-        # answer, and citation validation must not see the reasoning.
-        if "</think>" in answer:
-            answer = answer.split("</think>")[-1]
-
-        usage = {
-            "prompt_tokens": int(inputs.input_ids.shape[1]),
-            "completion_tokens": int(len(new_tokens)),
-        }
-        return answer.strip(), usage
-
-
-# --- answering ----------------------------------------------------------------
-
-
 class Answerer:
     def __init__(self, retriever, client=None, k: int = 6,
                  abstain_cosine: float = DEFAULT_ABSTAIN_COSINE):

@@ -28,15 +28,13 @@ placeholder text shaped to exercise the retrieval and chunking code.
 | `papers.json` | synthetic | `{id: {title, abstract}}` |
 | `paper_content.json` | synthetic | `{id: {title, method, result}}` |
 
-## Building the database
+## Building the index
 
-The SQLite database is generated, not committed:
+Retrieval reads these files directly. Nothing is precomputed and no database is involved:
 
 ```bash
-python buildDB/build_sample_db.py
+uv run python -m labrag.cli index
 ```
-
-That writes `experiments.db` with the `protocols` and `reagents` tables the demos query.
 
 ## Pointing at a real corpus
 

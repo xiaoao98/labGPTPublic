@@ -170,7 +170,7 @@ class QuestionResult:
 #: Documents actually handed to the model. Metrics are reported here rather than at a
 #: round number, because this is the only k whose value changes an answer: a document
 #: ranked seventh is not in the prompt and might as well not have been retrieved.
-#: Keep in step with the -k default in the cli and with TOP_K in demo.py.
+#: Keep in step with the -k default in the cli.
 SERVED_K = 6
 
 

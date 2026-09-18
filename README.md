@@ -214,9 +214,8 @@ uv run python -m labrag.cli --index-dir .index-pub answer-all --oracle \
 - Python 3.10 or newer
 - Building the retrieval index runs on CPU and takes seconds on this corpus. The embedding
   model, `BAAI/bge-small-en-v1.5`, downloads once at about 130 MB and then works offline
-- Generation goes one of two ways. `demo.py` loads an open-weights model locally and needs
-  a GPU with room for it; the `labrag.cli` commands call any OpenAI-compatible endpoint and
-  need no GPU at all
+- Generation calls any OpenAI-compatible endpoint, so it needs no GPU. Reranking is the
+  only step that wants one, and it runs on CPU if there is none
 
 With [uv](https://docs.astral.sh/uv/):
 
@@ -230,8 +229,8 @@ Or with pip:
 python -m venv .venv && .venv/bin/pip install -e .
 ```
 
-Optional extras: `search` for the web-search branch, `ingest` for the corpus preparation
-scripts in `buildDB/` and `tools/`, `dev` for pytest. With uv: `uv sync --extra search`.
+There are no optional extras. Everything the retrieval and evaluation path needs is a
+hard dependency, and the scripts in `tools/` use the standard library.
 
 ## Running it
 
@@ -247,13 +246,6 @@ Then ask it something. This path needs an endpoint rather than a GPU:
 ```bash
 uv run python -m labrag.cli selftest                     # one prompt, checks the endpoint
 uv run python -m labrag.cli ask "how do I thaw BJ cells"
-```
-
-Or run the local-model chat loop:
-
-```bash
-uv run python buildDB/build_sample_db.py   # generates experiments.db from the corpus CSVs
-uv run python demo.py
 ```
 
 ## Retrieval index
@@ -276,13 +268,8 @@ committed.
 
 ## Measuring cost per query
 
-Every call records prompt tokens, generated tokens and wall time. `answer-all` writes them
-per question; the local loop writes a JSONL when asked:
-
-```bash
-LABGPT_METRICS=metrics.jsonl python demo.py     # run some queries, then exit
-python labgpt_metrics.py metrics.jsonl          # per-stage breakdown
-```
+Every call records prompt tokens, generated tokens and wall time, and `answer-all` writes
+them per question into the output JSONL alongside the answer.
 
 Reasoning tokens are recorded separately from the answer. They are billed as completion
 tokens while forming no part of the reply, and conflating the two is what made an early
@@ -290,21 +277,15 @@ run return a hundred empty answers with no error.
 
 ## Configuration
 
-Everything resolves through `labgpt_config.py`. Override with environment variables, or
+Corpus paths resolve through `labgpt_config.py`. Override with environment variables, or
 copy `.env.example` to `.env`:
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `LABGPT_DATA_DIR` | `data/sample` | Corpus directory |
-| `LABGPT_DB_PATH` | `experiments.db` | Generated SQLite database |
-| `LABGPT_MODEL` | `Qwen/Qwen3-32B` | Hugging Face model id, for the local loop |
 | `LABGPT_LLM_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible endpoint |
 | `LABGPT_LLM_API_KEY` | unset | Key for that endpoint |
 | `LABGPT_LLM_MODEL` | unset | Default model for the cli |
-| `LABGPT_ASSISTANT_NAME` | `LabGPT` | Name shown in the chat prompt |
-| `LABGPT_METRICS` | unset | Path to write per-call metrics JSONL; off when unset |
-| `GOOGLE_API_KEY` | unset | Optional, for `search/callGoogleAPI.py` |
-| `GOOGLE_SEARCH_ENGINE_ID` | unset | Optional, for `search/callGoogleAPI.py` |
 
 ## Using a private corpus
 
@@ -352,9 +333,9 @@ it to a personal API key is a larger exposure than committing it would have been
 - **Paper sections are not expanded to whole documents,** unlike protocols. Deliberate,
   and argued in `labrag/documents.py`, but it means a methods answer sees one chunk rather
   than the section.
-- **`tools/` and `buildDB/` hold one-off ETL scripts** from the original ingest, some
-  duplicated across both directories, some referencing input files that are not in the
-  repository. They need consolidating.
+- **`tools/` builds corpora, and is not covered by anything.** The four scripts that
+  produce an evaluation corpus have no tests and reference input files that are not in the
+  repository, so a corpus rebuild is checked by reading its output.
 
 ## Roadmap
 
@@ -372,17 +353,14 @@ evaluation set. What the measurements now point at:
 
 | Path | Purpose |
 |---|---|
-| `demo.py` | Chat loop over retrieval, with a locally loaded model |
-| `labgpt_config.py` | Paths, model, corpus location |
-| `labgpt_metrics.py` | Per-call token and latency instrumentation |
 | `labrag/` | Retrieval and answering: chunking, ingest, embeddings, BM25, fusion, gates |
 | `labrag/cli.py` | `index`, `search`, `ask`, `eval`, `sweep`, `answer-all`, `selftest` |
+| `labrag/rerank.py` | Cross-encoder reranking over the fused candidates |
+| `labgpt_config.py` | Corpus paths |
 | `eval/` | Labelled question sets |
-| `protocolDemo.py` | Protocol and reagent lookup over SQLite |
-| `safetyDemo.py` | Safety corpus loading |
-| `memberInfoDemo.py` | Team directory loading |
-| `paperDemo.py`, `protocolPaperDemo.py` | Publication lookup |
-| `search/` | Web search and page fetching |
-| `buildDB/` | Corpus to SQLite ingest |
-| `tools/` | One-off data preparation utilities |
+| `tools/` | Corpus construction: PMC fetch, SQLite export, clean, merge |
 | `data/sample/` | Synthetic corpus |
+
+The prompt-stuffing assistant this grew out of, its per-domain demo scripts, its SQLite
+build and its web-search branch were removed once the retrieval path replaced them. They
+are in the history if the comparison in the roadmap is ever run.
