@@ -1,8 +1,13 @@
 # LabGPT
 
 A laboratory knowledge assistant. It answers questions about lab protocols, reagents,
-safety guidance, team responsibilities and the lab's own publications, over a corpus that
-can stay on the machine that holds it.
+safety guidance, team responsibilities and the lab's own publications.
+
+Indexing, retrieval and reranking run entirely on the machine holding the corpus, so
+nothing leaves during search. Generation calls an OpenAI-compatible endpoint, which means
+the handful of documents retrieved for a question do leave. Which endpoint that is decides
+what a private corpus is exposed to, and is the one deployment choice this repository
+cannot make for you.
 
 Retrieval is hybrid: a local embedding model and a hand-written BM25, fused by reciprocal
 rank. Every answer cites the documents it came from, every citation is checked against the
@@ -12,8 +17,9 @@ retrieval comes back weak.
 The repository ships with a **synthetic corpus** in `data/sample`. Point it at a real
 corpus to run it for real.
 
-**Measured end to end on 100 labelled questions, answers graded by hand: 90% correct.**
-The numbers, and what they do and do not establish, are in [Results](#results).
+**Measured end to end on 100 labelled questions, answers graded by hand: 90% correct, or
+93% with reranking on.** The numbers, and what they do and do not establish, are in
+[Results](#results).
 
 ## How it works
 
@@ -24,6 +30,8 @@ query
   +-- BM25    top 20 by exact term overlap
   |
   +-- reciprocal rank fusion            rank-based, not score-based
+  |
+  +-- cross-encoder rerank              restores what fusion discarded, GPU only
   |
   +-- expand chunks to documents        small-to-big, protocols served whole
   |
@@ -161,8 +169,9 @@ outcome, reached without spending a token.
 
 #### Cost
 
-13.1 seconds a query on this CPU against 6.2 for generation, which is why the default
-follows the hardware. On a GPU the model should be a rounding error.
+13.1 seconds a query on this CPU against 4.6 for generation, so on this machine reranking
+costs about three times what answering does, which is why the default follows the
+hardware. On a GPU the model should be a rounding error.
 
 Candidate pool size was tested and left at 20 per leg. Raising both to 50 gives exactly
 the same success@1 with success@6 1.2 points lower and twice the latency, which follows
@@ -171,21 +180,28 @@ larger pool adds only candidates ranked below where any of them sit.
 
 ### Grounding
 
+Counted over the two runs in the table above, 176 answers in total: 90 from the default
+run and 86 from the reranked one, the rest of each being refusals.
+
 | | result |
 |---|---|
-| invented citation numbers | 0 of 162 answers |
-| answers with no citation at all | 0 |
+| invented citation numbers | 0 of 176 answers |
+| answers with no citation at all | 0 of 176 |
 | unanswerable questions answered anyway | 0 of 19 |
-| answers graded "unsupported" by a human | 0 of 162 |
+| answers graded "unsupported" by a human | 0 of 176 |
 
-Both gates held across both runs. Of the 19 unanswerable questions, 9 were stopped by the
-cosine gate before any model call and 10 were refused by the model itself under the
-prompt's third rule, which is the split the two-gate design predicts.
+The first three rows are recomputed from the run files rather than transcribed, so they
+move if the runs are regenerated. Both gates held across both runs.
+
+Of the 19 unanswerable questions, 9 were stopped by the cosine gate before any model call
+and 10 were refused by the model itself under the prompt's third rule, which is the split
+the two-gate design predicts.
 
 ### Cost
 
-307,837 tokens over 100 questions, 3,078 per query, of which the retrieved evidence is
-87.2%. 6.2 seconds per question. No failed calls.
+374,993 tokens over 100 questions, 3,750 per query, of which the retrieved evidence is
+89.8%. 4.6 seconds per question, and no failed calls. Measured from the default run the
+table above grades, `runs/prod.jsonl` below.
 
 ### What these numbers do not establish
 
@@ -197,7 +213,8 @@ prompt's third rule, which is the split the two-gate design predicts.
   a document that answers it would score the model wrong for being right, which biases the
   98.8% downward rather than up.
 - **The private corpus has never been through generation.** The comparison against the
-  original prompt-stuffing assistant is not done.
+  original prompt-stuffing assistant is not done, and that assistant is no longer in the
+  tree, so running it now means checking out `d681ce6` alongside this.
 
 Reproduce with:
 
@@ -205,9 +222,15 @@ Reproduce with:
 uv run python -m labrag.cli --index-dir .index-pub eval --questions eval/questions_public.yaml
 uv run python -m labrag.cli --index-dir .index-pub answer-all \
     --questions eval/questions_public.yaml --out runs/prod.jsonl
+uv run python -m labrag.cli --index-dir .index-pub answer-all --rerank \
+    --questions eval/questions_public.yaml --out runs/rerank.jsonl
 uv run python -m labrag.cli --index-dir .index-pub answer-all --oracle \
     --questions eval/questions_public.yaml --out runs/oracle.jsonl
 ```
+
+`runs/` is gitignored, because answers over a private corpus quote it back verbatim.
+The three files above are what every number in this section is computed from, except
+correct and incomplete, which are human grades the files do not carry.
 
 ## Setup
 
@@ -347,7 +370,8 @@ evaluation set. What the measurements now point at:
    category no reranker moved at all
 2. A second annotator on the evaluation set, so category-level numbers mean something
 3. The head-to-head against the original prompt-stuffing assistant, on the private corpus,
-   through an approved endpoint
+   through an approved endpoint. It needs `d681ce6` checked out beside this one, which is
+   the last commit where that assistant still ran
 
 ## Layout
 
@@ -358,9 +382,10 @@ evaluation set. What the measurements now point at:
 | `labrag/rerank.py` | Cross-encoder reranking over the fused candidates |
 | `labgpt_config.py` | Corpus paths |
 | `eval/` | Labelled question sets |
-| `tools/` | Corpus construction: PMC fetch, SQLite export, clean, merge |
+| `tools/` | Corpus construction: PMC fetch, clean, merge, and a dump of the lab's own SQLite |
 | `data/sample/` | Synthetic corpus |
 
 The prompt-stuffing assistant this grew out of, its per-domain demo scripts, its SQLite
-build and its web-search branch were removed once the retrieval path replaced them. They
-are in the history if the comparison in the roadmap is ever run.
+build and its web-search branch were removed in `a2bc0ee` once the retrieval path replaced
+them. `export_experiments_db.py` survives because the lab's database is still where the
+real protocol text comes from, but nothing here builds one any more.
