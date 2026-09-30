@@ -361,11 +361,29 @@ class AzureChatClient(ChatClient):
     which is what the openai SDK's AzureOpenAI client builds internally, so an endpoint
     that works with that client works here.
 
-    AZURE_OPENAI_ENDPOINT is the whole base and is not assembled from parts. Behind an API
-    Management gateway the route usually carries a path segment identifying the team or
-    product, and that segment belongs in the variable along with the host. No host is
-    defaulted here: an institutional gateway address is that institution's to publish, and
-    this repository is public.
+    WHERE THE BASE URL COMES FROM.
+
+    Two ways to supply it, because the working Azure snippet people are handed at this
+    institution assembles it from a team id rather than naming a base URL:
+
+        AZURE_OPENAI_ENDPOINT                       the whole base, used as given
+        AZURE_OPENAI_GATEWAY + AZURE_OPENAI_TEAM_ID joined as {gateway}/{team_id}
+
+    That second form is the one the autogen/openai-SDK snippet builds
+    (azure_endpoint=f"https://<gateway-host>/<product>/{team_id}"), so putting the host
+    and product segment in AZURE_OPENAI_GATEWAY and leaving the team id where it already
+    is reproduces it exactly. No host is defaulted in code: an institutional gateway
+    address is that institution's to publish, and this repository is public.
+
+    Whichever form is used, the base is normalised before the path is appended. A 401
+    from an API Management gateway reads "invalid subscription key or wrong API endpoint",
+    and the wrong-endpoint half of that is by far the more common cause: a base that stops
+    at the gateway host and omits the team segment is routed to no product at all and is
+    rejected as unsubscribed, which looks exactly like a bad key. So when a team id is set
+    and is not already somewhere in the base path, it is appended, and a base that was
+    pasted in whole (ending in /openai, /openai/deployments/<name>, a /chat/completions,
+    or carrying an ?api-version query) is trimmed back to its base before the client
+    rebuilds those parts itself.
 
     NOT VERIFIED AGAINST A LIVE GATEWAY. Written from the request shape, with no access to
     that network. Run `labrag.cli selftest` on the institutional machine before committing
@@ -382,7 +400,10 @@ class AzureChatClient(ChatClient):
         deployment = (deployment or model
                       or os.environ.get("AZURE_OPENAI_MODEL_ID")
                       or os.environ.get("AZURE_OPENAI_DEPLOYMENT"))
+        team_id = os.environ.get("AZURE_OPENAI_TEAM_ID")
         endpoint = endpoint or os.environ.get("AZURE_OPENAI_ENDPOINT")
+        if not endpoint and team_id and os.environ.get("AZURE_OPENAI_GATEWAY"):
+            endpoint = f"{os.environ['AZURE_OPENAI_GATEWAY'].rstrip('/')}/{team_id}"
         api_version = api_version or os.environ.get("AZURE_OPENAI_API_VERSION")
         api_key = (api_key
                    or os.environ.get("APIM_OPENAI_SUBSCRIPTION_KEY")
@@ -396,13 +417,11 @@ class AzureChatClient(ChatClient):
         ) if not value]
         if missing:
             hint = ""
-            if not endpoint and os.environ.get("AZURE_OPENAI_TEAM_ID"):
-                # A team id on its own used to be enough, when the gateway host was
-                # hardcoded here. It no longer is, and saying so beats a bare
-                # missing-variable list for the one person who will hit this.
-                hint = ("; AZURE_OPENAI_TEAM_ID is set but is no longer used on its "
-                        "own, so put the full base URL in AZURE_OPENAI_ENDPOINT, "
-                        "including the gateway path segment for the team")
+            if not endpoint and team_id:
+                hint = ("; AZURE_OPENAI_TEAM_ID is set, so either put the full base URL "
+                        "in AZURE_OPENAI_ENDPOINT, or set AZURE_OPENAI_GATEWAY to the "
+                        "gateway host and product path and the team id will be appended "
+                        "to it")
             raise LLMError("Azure OpenAI is not fully configured; missing "
                            + ", ".join(missing) + hint)
 
@@ -411,14 +430,41 @@ class AzureChatClient(ChatClient):
         # usually lands; when it does not, the 400 corrects it on the first call.
         super().__init__(model=deployment, **kwargs)
         self.deployment = deployment
-        self.endpoint = endpoint.rstrip("/")
+        self.endpoint = self._normalise_endpoint(endpoint, team_id)
         self.api_version = api_version
         self._key = api_key
         self.url = (f"{self.endpoint}/openai/deployments/{self.deployment}"
                     f"/chat/completions?api-version={self.api_version}")
 
+    @staticmethod
+    def _normalise_endpoint(endpoint: str, team_id: str | None = None) -> str:
+        """The base URL the deployment path gets appended to.
+
+        Strips anything the client is about to add back, so a value copied out of a
+        browser or another client still works, and appends the team segment when the base
+        is missing it, which is the configuration mistake that produces a 401 reading as
+        a bad key.
+        """
+        base = endpoint.split("?", 1)[0].rstrip("/")
+        for suffix in ("/chat/completions", "/completions", "/embeddings"):
+            if base.endswith(suffix):
+                base = base[: -len(suffix)]
+        # /openai/deployments/<name> and a bare /openai are both rebuilt below.
+        base = re.sub(r"/openai/deployments/[^/]+$", "", base)
+        base = re.sub(r"/openai$", "", base).rstrip("/")
+        if team_id and team_id not in base.split("/"):
+            base = f"{base}/{team_id}"
+        return base
+
     def _headers(self) -> dict:
-        return {"Content-Type": "application/json", "api-key": self._key}
+        # api-key is what Azure OpenAI itself reads and what the openai SDK sends.
+        # Ocp-Apim-Subscription-Key is what an API Management gateway in front of it
+        # reads. They carry the same secret here, and a gateway that only understands
+        # one ignores the other, so sending both means one client covers a direct Azure
+        # resource and a gatewayed one without being told which it is talking to.
+        return {"Content-Type": "application/json",
+                "api-key": self._key,
+                "Ocp-Apim-Subscription-Key": self._key}
 
 
 def chat_client_from_env(model: str | None = None, provider: str = "auto", **kwargs):
@@ -428,7 +474,10 @@ def chat_client_from_env(model: str | None = None, provider: str = "auto", **kwa
     machine both may be set and the approved endpoint is the one that should win. Data
     reaching a personal API key by default is exactly the accident worth designing out.
     """
-    azure_configured = bool(os.environ.get("AZURE_OPENAI_ENDPOINT"))
+    azure_configured = bool(
+        os.environ.get("AZURE_OPENAI_ENDPOINT")
+        or (os.environ.get("AZURE_OPENAI_GATEWAY")
+            and os.environ.get("AZURE_OPENAI_TEAM_ID")))
     if provider == "azure" or (provider == "auto" and azure_configured):
         return AzureChatClient(model=model, **kwargs)
     if provider not in ("auto", "openai"):

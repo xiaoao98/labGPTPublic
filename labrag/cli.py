@@ -484,8 +484,16 @@ def main(argv=None) -> int:
     p_ask.add_argument("--dry-run", action="store_true",
                        help="show the assembled prompt instead of calling a model")
     p_ask.add_argument("--show", type=int, default=2500, help="dry-run print limit")
-    p_ask.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini",
-                       help="chat model; also LABGPT_LLM_MODEL")
+    # Defaults to None rather than to a model name, and this is not cosmetic. The name
+    # given here is passed on as the *deployment* when the provider resolves to Azure,
+    # where it becomes a path segment. A default of "gpt-4o-mini" therefore silently
+    # overrode AZURE_OPENAI_MODEL_ID and requested a deployment that does not exist; an
+    # API Management gateway answers an unroutable path with a 401 about the subscription
+    # key, so the symptom pointed at the key rather than at the model name. Leaving it
+    # None lets chat_client_from_env pick the right per-provider source.
+    p_ask.add_argument("--model", default=None,
+                       help="chat model, or Azure deployment; also LABGPT_LLM_MODEL "
+                            "or AZURE_OPENAI_MODEL_ID")
     p_ask.add_argument("--base-url", default=None,
                        help="OpenAI-compatible endpoint; also LABGPT_LLM_BASE_URL")
     p_ask.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"),
@@ -500,7 +508,9 @@ def main(argv=None) -> int:
     p_ask.set_defaults(func=cmd_ask)
 
     p_self = sub.add_parser("selftest", help="send one prompt, to check the endpoint")
-    p_self.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
+    p_self.add_argument("--model", default=None,
+                        help="chat model, or Azure deployment; also LABGPT_LLM_MODEL "
+                             "or AZURE_OPENAI_MODEL_ID")
     p_self.add_argument("--base-url", default=None)
     p_self.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
     p_self.add_argument("--max-tokens", type=int, default=512)
@@ -517,7 +527,9 @@ def main(argv=None) -> int:
     p_all.add_argument("--only", help="comma-separated question ids")
     p_all.add_argument("--resume", action="store_true",
                        help="append, skipping ids already in --out")
-    p_all.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
+    p_all.add_argument("--model", default=None,
+                        help="chat model, or Azure deployment; also LABGPT_LLM_MODEL "
+                             "or AZURE_OPENAI_MODEL_ID")
     p_all.add_argument("--base-url", default=None)
     p_all.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
     p_all.add_argument("--max-tokens", type=int, default=800)
