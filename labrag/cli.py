@@ -196,6 +196,27 @@ def cmd_ask(args) -> int:
     return 0
 
 
+# The same two variables demo.py reads, so a shell configured for one is configured for
+# both.
+#
+# 2500 is measured rather than guessed, and the measurement is on the parser arguments
+# below: over 101 real questions with retrieved context, low effort spent a median of 192
+# reasoning tokens, 448 at the 90th percentile and 704 at the worst successful call, while
+# a 800-token budget left seventeen questions with nothing written at all. The budget is a
+# cap rather than a spend, so the headroom costs nothing on a model that does not use it.
+DEFAULT_MAX_TOKENS = int(os.environ.get("LABGPT_MAX_TOKENS") or 2500)
+REASONING_EFFORTS = ("minimal", "low", "medium", "high")
+
+
+def _default_effort():
+    """LABGPT_REASONING_EFFORT, rejected here rather than by the endpoint as a 400."""
+    effort = os.environ.get("LABGPT_REASONING_EFFORT") or None
+    if effort is not None and effort not in REASONING_EFFORTS:
+        raise SystemExit(f"LABGPT_REASONING_EFFORT must be one of "
+                         f"{', '.join(REASONING_EFFORTS)}, not {effort!r}")
+    return effort
+
+
 def _client(args):
     """The chat client these arguments ask for.
 
@@ -643,10 +664,10 @@ def main(argv=None) -> int:
     # effort spent a median of 192 reasoning tokens, 448 at the 90th percentile and 704 at
     # the worst successful call, and seventeen questions consumed all 800 without writing
     # a word. 2500 leaves room for the worst of those plus a full cited answer.
-    p_ask.add_argument("--max-tokens", type=int, default=2500)
-    p_ask.add_argument("--reasoning-effort", default=None,
-                       choices=("minimal", "low", "medium", "high"),
-                       help="reasoning models only; omitted means the endpoint default")
+    p_ask.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    p_ask.add_argument("--reasoning-effort", default=_default_effort(),
+                       choices=REASONING_EFFORTS,
+                       help="reasoning models only; also LABGPT_REASONING_EFFORT")
     p_ask.add_argument("--no-rerank", action="store_true",
                         help="skip the reranking pass even where it is cheap")
     p_ask.add_argument("--rerank", action="store_true",
@@ -663,9 +684,9 @@ def main(argv=None) -> int:
                              "or AZURE_OPENAI_MODEL_ID")
     p_self.add_argument("--base-url", default=None)
     p_self.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
-    p_self.add_argument("--max-tokens", type=int, default=512)
-    p_self.add_argument("--reasoning-effort", default=None,
-                        choices=("minimal", "low", "medium", "high"))
+    p_self.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    p_self.add_argument("--reasoning-effort", default=_default_effort(),
+                        choices=REASONING_EFFORTS)
     p_self.set_defaults(func=cmd_selftest)
 
     p_all = sub.add_parser("answer-all", help="answer a whole question set, to JSONL")
@@ -686,9 +707,9 @@ def main(argv=None) -> int:
                             "or AZURE_OPENAI_MODEL_ID")
     p_all.add_argument("--base-url", default=None)
     p_all.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
-    p_all.add_argument("--max-tokens", type=int, default=2500)
-    p_all.add_argument("--reasoning-effort", default=None,
-                       choices=("minimal", "low", "medium", "high"))
+    p_all.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    p_all.add_argument("--reasoning-effort", default=_default_effort(),
+                       choices=REASONING_EFFORTS)
     p_all.add_argument("--no-rerank", action="store_true",
                         help="skip the reranking pass even where it is cheap")
     p_all.add_argument("--rerank", action="store_true",

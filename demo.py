@@ -18,8 +18,8 @@ no way to refuse when none of them were.
 
 Now:
 
-    1 classifier call, only to decide whether to search the web, which is a real
-      external call worth gating
+    1 classifier call on the local path, only to decide whether to search the web, which
+      is a real external call worth gating; none at all on the endpoint path
     hybrid retrieval over one index -> top k documents
     abstention gate on the retrieval score, before a token is spent
     generate with numbered sources and required citations
@@ -117,6 +117,7 @@ class LocalBackend:
 
     streams = True
     web_search = True
+    answer_tokens = MAX_NEW_TOKENS_ANSWER
 
     def __init__(self):
         # Imported here, not at module scope, so the api path runs on a machine with no
@@ -165,8 +166,28 @@ class ApiBackend:
     web_search = False
     MIN_TOKENS = 64
 
+    # The answer budget is larger here than on the local path, and this is the reason.
+    # A reasoning deployment spends its reasoning tokens out of the same allowance and
+    # spends them first, so the budget is not an answer length: at the endpoint's own
+    # default effort, gpt-5 spent all 1024 tokens of the local path's budget on reasoning
+    # and returned an empty answer.
+    #
+    # 2500 is the CLI's measured figure rather than a guess: over 101 real questions at
+    # low effort, reasoning took a median of 192 tokens, 448 at the 90th percentile and
+    # 704 at the worst successful call. Kept in step with cli.DEFAULT_MAX_TOKENS, and
+    # overridden by the same LABGPT_MAX_TOKENS.
+    #
+    # The effort default is the other half. Answers on this workload are quoted from the
+    # supplied sources rather than derived, so reasoning buys little: "minimal", "low" and
+    # "medium" were measured returning the same answer with zero reasoning tokens spent,
+    # where the endpoint default spends over a thousand. Low unless LABGPT_REASONING_EFFORT
+    # says otherwise.
+    DEFAULT_EFFORT = "low"
+
     def __init__(self):
-        self.reasoning_effort = os.environ.get("LABGPT_REASONING_EFFORT") or None
+        self.reasoning_effort = (os.environ.get("LABGPT_REASONING_EFFORT")
+                                 or self.DEFAULT_EFFORT)
+        self.answer_tokens = int(os.environ.get("LABGPT_MAX_TOKENS") or 2500)
         if not _endpoint_configured():
             # Reported here rather than as a 401 from api.openai.com on the first question,
             # which is what an unconfigured OpenAI-shaped client would produce.
@@ -188,7 +209,8 @@ class ApiBackend:
         self._model = probe.model
 
     def describe(self) -> str:
-        return f"{self._kind} {self._model}"
+        return (f"{self._kind} {self._model}, {self.answer_tokens} tokens, "
+                f"reasoning_effort={self.reasoning_effort}")
 
     def client(self, max_tokens: int, stream: bool = False, thinking: bool = False):
         # stream and thinking are accepted to match LocalBackend and ignored: an endpoint
@@ -332,7 +354,7 @@ def answer_query(query, retriever, backend) -> None:
 
     # The local backend streams as it generates, so the answer is already on screen by the
     # time complete() returns. An endpoint returns it whole, and it is printed below.
-    client = backend.client(MAX_NEW_TOKENS_ANSWER, stream=True)
+    client = backend.client(backend.answer_tokens, stream=True)
 
     try:
         with metrics.timer() as elapsed:
