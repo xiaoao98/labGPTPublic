@@ -130,20 +130,20 @@ BACKEND = os.environ.get("LABGPT_BACKEND", "api")
 # still withheld: that is a model ignoring its evidence, not a gap in the corpus.
 ABSTAIN_MODE = os.environ.get("LABGPT_ABSTAIN_MODE", "answer")
 
-# Whether a cross-encoder re-sorts the fused shortlist before the top k is taken. "auto"
-# defers to the hardware, which is what the CLI does and for the same measured reason: the
-# pass buys roughly three end-to-end questions in a hundred, and costs 13.1 seconds a query
-# on a CPU against 6.2 for generation. Free on a GPU, and the dominant cost of a question
-# without one.
+# Whether a cross-encoder re-sorts the fused shortlist before the top k is taken. Off
+# unless asked for, matching the CLI: the pass buys roughly three end-to-end questions in
+# a hundred at n=100, which is inside the interval, and costs 13.1 seconds a query on a
+# CPU against 6.2 for generation. It also downloads a second model, BAAI/bge-reranker-base,
+# which a network that blocks huggingface.co will not allow.
+#
+#   off   (default)  no reranking
+#   on               always, whatever the hardware
+#   auto             on where a GPU makes it nearly free, off otherwise
 #
 # demo.py ran without a reranker at all while the CLI reranked by default, so the same
 # question could be answered from a differently ordered shortlist depending on which one
-# asked it. That was an oversight, not a decision.
-#
-# It loads a second model, BAAI/bge-reranker-base, on first use. On a network that blocks
-# huggingface.co that download fails the way the embedding model does, so "off" is the
-# escape hatch and says so when it fires.
-RERANK_MODE = os.environ.get("LABGPT_RERANK", "auto")
+# asked it. Both are off by default now, and both say so at startup.
+RERANK_MODE = os.environ.get("LABGPT_RERANK", "off")
 if RERANK_MODE not in ("auto", "on", "off"):
     raise SystemExit(f"LABGPT_RERANK must be auto, on or off, not {RERANK_MODE!r}")
 

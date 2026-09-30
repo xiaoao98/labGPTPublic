@@ -23,8 +23,9 @@ The repository ships with a **synthetic corpus** in `data/sample`. Point it at a
 corpus to run it for real.
 
 **Measured end to end on 100 labelled questions, answers graded by hand: 90% correct, or
-93% with reranking on.** The numbers, and what they do and do not establish, are in
-[Results](#results).
+93% with the optional reranking pass.** Reranking is off by default and turned on with
+`--rerank`, or `LABGPT_RERANK=on` for the chat loop. The numbers, and what they do and do
+not establish, are in [Results](#results).
 
 ## How it works
 
@@ -36,7 +37,7 @@ query
   |
   +-- reciprocal rank fusion            rank-based, not score-based
   |
-  +-- cross-encoder rerank              restores what fusion discarded, GPU only
+  +-- cross-encoder rerank              optional, off by default: --rerank
   |
   +-- expand chunks to documents        small-to-big, protocols served whole
   |
@@ -74,7 +75,8 @@ that the document actually contains the answer its note claims. Generation by gp
 reasoning effort, six documents per query. Every answer was then read and graded by a
 person.
 
-**End to end, 90 of 100 correct, or 93 with the reranker on.** Both were graded by
+**End to end, 90 of 100 correct, or 93 with the reranker on.** Reranking is opt-in; the
+90 is what the shipped default produces. Both were graded by
 reading every answer.
 
 | | answerable, 81 | unanswerable, 19 | total |
@@ -83,10 +85,9 @@ reading every answer.
 | with reranker | 74 | 19 | **93 / 100** |
 | oracle context | 80 | not applicable | — |
 
-Which of the two runs the default is decided by the hardware: reranking is on where it is
-cheap and off where it is not, and `eval` prints which one produced a given table. The
-nineteen unanswerable questions are refused either way, with nothing invented in either
-run.
+The default run is the first row: reranking is off unless `--rerank` asks for it, and
+`eval` prints which one produced a given table. The nineteen unanswerable questions are
+refused either way, with nothing invented in either run.
 
 ### Where the failures come from
 
@@ -139,8 +140,10 @@ A cross-encoder pass over the fused candidates. It exists because fusion reads r
 discards scores, so a document one leg is certain about loses to one both legs merely
 like.
 
-On by default where a GPU is present and off where it is not, since that is the whole of
-the argument either way; `--rerank` and `--no-rerank` override.
+Off by default, on with `--rerank`. It was on-where-a-GPU-is-present for a while, and a
+default that changes with the machine makes two runs incomparable without reading the
+header that says which one happened, for a gain of three questions at n=100 that the
+interval does not resolve. `--no-rerank` still says off explicitly.
 
 | | success@1 | success@6 | nDCG@10 | seconds per query |
 |---|---|---|---|---|
@@ -183,8 +186,8 @@ outcome, reached without spending a token.
 #### Cost
 
 13.1 seconds a query on this CPU against 4.6 for generation, so on this machine reranking
-costs about three times what answering does, which is why the default follows the
-hardware. On a GPU the model should be a rounding error.
+costs about three times what answering does. On a GPU it should be a rounding error, which
+is the case worth turning it on for.
 
 Candidate pool size was tested and left at 20 per leg. Raising both to 50 gives exactly
 the same success@1 with success@6 1.2 points lower and twice the latency, which follows
@@ -316,12 +319,21 @@ It reads `.index/` and nothing else from disk, and prints what it resolved on st
 
 ```
 index: 678 documents, 2745 chunks
-rerank: BAAI/bge-reranker-base
+rerank: off
 model: AzureChatClient gpt-5-chat, 2500 tokens, reasoning_effort=low
 ```
 
 `exit` or Ctrl-D leaves. Each answer is followed by the sources it cited, and by a count
 of factual sentences that carried no citation.
+
+Reranking is off here too. `LABGPT_RERANK=on` turns it on for a session, `auto` defers to
+the hardware, and either way the model loads at startup rather than inside the first
+question, so a hub that cannot be reached costs one warning and the session continues
+without it:
+
+```bash
+LABGPT_RERANK=on uv run python demo.py
+```
 
 ## Where generation happens
 
@@ -440,7 +452,7 @@ uv run python -m labrag.cli search "SMP-17104" --explain   # retrieve, no LLM
 uv run python -m labrag.cli ask "how do I thaw BJ cells" --dry-run  # gate + prompt
 uv run python -m labrag.cli eval --failures    # score retrieval against a question set
 uv run python -m labrag.cli sweep              # compare retrieval configurations
-uv run python -m labrag.cli eval --rerank      # with the cross-encoder pass
+uv run python -m labrag.cli eval --rerank      # with the cross-encoder pass, off by default
 uv run python -m labrag.cli answer-all --questions ... --out ...   # batch, to JSONL
 ```
 
@@ -476,7 +488,7 @@ copy `.env.example` to `.env`:
 |---|---|---|
 | `LABGPT_DATA_DIR` | `data/sample` | Corpus directory, read when building an index |
 | `LABGPT_EMBED_MODEL` | `BAAI/bge-small-en-v1.5` | Embedding model, or a directory holding it |
-| `LABGPT_RERANK` | `auto` | `auto` (by hardware), `on`, `off`; `demo.py` only |
+| `LABGPT_RERANK` | `off` | `off`, `on`, `auto` (on where a GPU makes it cheap); `demo.py` only |
 | `LABGPT_RERANK_MODEL` | `BAAI/bge-reranker-base` | Cross-encoder, `demo.py` only |
 | `LABGPT_MAX_TOKENS` | `2500` | Answer budget, shared with reasoning tokens |
 | `LABGPT_REASONING_EFFORT` | `low` in `demo.py`, endpoint default in the CLI | `minimal`/`low`/`medium`/`high` |
@@ -507,8 +519,8 @@ Endpoint selection, read wherever a model is called:
 | `LABGPT_METRICS` | unset | Path to write per-call metrics JSONL; off when unset |
 
 On a network that blocks huggingface.co, both models have to arrive by hand. Fetch them
-elsewhere, then point `LABGPT_EMBED_MODEL` at the directory; the reranker is optional, so
-`LABGPT_RERANK=off` is the alternative to fetching it. A hub that cannot be reached is
+elsewhere, then point `LABGPT_EMBED_MODEL` at the directory. The reranker is off by
+default, so on such a network it costs nothing until it is asked for. A hub that cannot be reached is
 reported as such rather than as a missing package.
 
 ## Using a private corpus
@@ -536,8 +548,10 @@ it to a personal API key is a larger exposure than committing it would have been
   defeated by the same thing, so the next place to look is the embedding model rather than
   the ranking.
 - **Three questions is not a demonstrated improvement.** Reranking moves the end-to-end
-  score from 90 to 93 of 100 and the confidence intervals overlap. It is free on a GPU, so
-  it is on, but the size of the gain is not established at n=100.
+  score from 90 to 93 of 100 and the confidence intervals overlap. That is why it is
+  opt-in rather than on wherever it is cheap: the gain is not established at n=100, and a
+  default that varies by machine would put an unestablished difference into runs nobody
+  asked to differ.
 - **Fusion discards calibrated similarity.** Reciprocal rank fusion reads only ranks, so a
   chunk both legs place in their top handful beats a chunk one leg is certain about. On
   "what should I do if I stick myself with a needle" the correct entry has cosine 0.710

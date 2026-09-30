@@ -433,17 +433,20 @@ def _build(store, mode, args, weight_lexical=1.0):
 
 
 def _rerank_wanted(args) -> bool:
-    """Whether to rerank, with the default decided by the hardware.
+    """Whether to rerank. Off unless asked for.
 
-    The pass is worth roughly three end-to-end questions in a hundred and costs 13.1
-    seconds a query on a CPU against 6.2 for generation, so on a CPU it is a bad default
-    and on a GPU it is a free one. --rerank and --no-rerank both override.
+    It used to follow the hardware, on where a GPU made it nearly free. Off is the simpler
+    contract: the pass downloads a second model, costs 13.1 seconds a query on a CPU
+    against 6.2 for generation, and buys about three end-to-end questions in a hundred at
+    n=100, which is inside the interval. A default that changes with the machine also
+    makes two runs incomparable without reading the header that says which one happened.
+
+    --rerank turns it on. --no-rerank is kept so a script can say off explicitly and stay
+    correct if the default ever moves again.
     """
     if getattr(args, "no_rerank", False):
         return False
-    if getattr(args, "rerank", False):
-        return True
-    return rerank_is_cheap()
+    return bool(getattr(args, "rerank", False))
 
 
 def _reranker(args):
