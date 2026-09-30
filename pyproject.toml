@@ -19,6 +19,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The HTTP service. Not needed by the cli or by demo.py, and the container installs it.
+serve = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+
 # demo.py's web search branch, which runs on the local backend only. The api backend
 # skips that leg entirely, so an endpoint-only deployment does not need any of this.
 # Only the two modules demo.py imports were kept when the repository was cut down to the

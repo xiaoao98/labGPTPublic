@@ -1,0 +1,151 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LabGPT</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --fg: #1a1a1a; --dim: #6b6b6b; --line: #e2ded8;
+    --card: #fff; --accent: #2f5d50;
+    --warn-bg: #fff8e6; --warn-line: #e0b95c; --warn-fg: #6b4e00;
+    --stop-bg: #f6f3ef; --stop-line: #c9c2b8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a; --fg: #e9e6e1; --dim: #9a958d; --line: #2e3033;
+      --card: #1f2124; --accent: #7fbfa8;
+      --warn-bg: #2a2314; --warn-line: #7a6222; --warn-fg: #e8c86a;
+      --stop-bg: #202225; --stop-line: #3a3d41;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 20px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 20px; }
+  form { display: flex; gap: 8px; margin-bottom: 8px; }
+  /* form's display would otherwise beat the browser's [hidden] rule, and the token box
+     would stay on screen after it had been saved. */
+  [hidden] { display: none !important; }
+  input[type=text], input[type=password] {
+    flex: 1; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--card); color: var(--fg); font: inherit; min-width: 0; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button { padding: 10px 16px; border: 0; border-radius: 8px; background: var(--accent);
+           color: #fff; font: inherit; font-weight: 500; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .answer { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+            padding: 16px 18px; margin-top: 16px; }
+  .answer.unsourced { background: var(--warn-bg); border-color: var(--warn-line); }
+  .answer.refused, .answer.withheld { background: var(--stop-bg); border-color: var(--stop-line); }
+  .banner { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--warn-fg); }
+  .answer.refused .banner, .answer.withheld .banner { color: var(--dim); }
+  .text { white-space: pre-wrap; }
+  .meta { color: var(--dim); font-size: 12px; margin-top: 14px;
+          border-top: 1px solid var(--line); padding-top: 10px; }
+  .cite { margin: 6px 0 0; padding: 0; list-style: none; font-size: 13px; }
+  .cite li { margin: 3px 0; }
+  .tag { display: inline-block; min-width: 30px; margin-right: 6px;
+         color: var(--accent); font-weight: 600; }
+  .src { color: var(--dim); }
+  .err { color: #b3261e; margin-top: 16px; }
+  @media (prefers-color-scheme: dark) { .err { color: #f2b8b5; } }
+</style>
+
+<div class="wrap">
+  <h1>LabGPT</h1>
+  <div class="sub">Answers from the lab's indexed protocols, reagents, safety guidance,
+    directory and publications. Every grounded answer cites what it used.</div>
+
+  <form id="tokenForm" hidden>
+    <input type="password" id="token" placeholder="Access token" autocomplete="current-password">
+    <button type="submit">Save</button>
+  </form>
+
+  <form id="askForm">
+    <input type="text" id="q" placeholder="e.g. how do I thaw BJ cells" autocomplete="off">
+    <button type="submit" id="go">Ask</button>
+  </form>
+
+  <div id="out"></div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const KEY = "labgpt_token";
+  let token = localStorage.getItem(KEY) || "";
+  if (!token) $("tokenForm").hidden = false;
+
+  $("tokenForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    token = $("token").value.trim();
+    localStorage.setItem(KEY, token);
+    $("tokenForm").hidden = true;
+    $("q").focus();
+  });
+
+  // The four modes are rendered differently on purpose. An unsourced answer that looks
+  // like a sourced one is the failure this whole page is arranged to prevent.
+  const BANNERS = {
+    unsourced: "Not from the lab's documentation. General knowledge, no citations — confirm anything lab-specific with the protocol owner.",
+    refused: "Nothing in the indexed documentation matched this.",
+    withheld: "A draft was produced but cited no indexed document, so it is not shown.",
+  };
+
+  $("askForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const question = $("q").value.trim();
+    if (!question) return;
+    $("go").disabled = true;
+    $("out").innerHTML = '<div class="answer"><div class="text">Thinking…</div></div>';
+    try {
+      const res = await fetch("/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-LabGPT-Token": token },
+        body: JSON.stringify({ question }),
+      });
+      if (res.status === 401) {
+        localStorage.removeItem(KEY);
+        $("tokenForm").hidden = false;
+        $("out").innerHTML = '<div class="err">That token was not accepted. Enter it again.</div>';
+        return;
+      }
+      const data = await res.json();
+      if (!res.ok) {
+        $("out").innerHTML = '<div class="err">' + esc(data.detail || "request failed") + "</div>";
+        return;
+      }
+      render(data);
+    } catch (err) {
+      $("out").innerHTML = '<div class="err">' + esc(String(err)) + "</div>";
+    } finally {
+      $("go").disabled = false;
+    }
+  });
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function render(d) {
+    const banner = BANNERS[d.mode] ? '<div class="banner">' + BANNERS[d.mode] + "</div>" : "";
+    let cites = "";
+    if (d.cited && d.cited.length) {
+      const items = d.cited.map((n) => {
+        const s = d.sources[n - 1];
+        return '<li><span class="tag">[S' + n + "]</span>" + esc(s.title) +
+               ' <span class="src">(' + esc(s.source) + ")</span></li>";
+      }).join("");
+      cites = '<ul class="cite">' + items + "</ul>";
+    }
+    const bits = ["match " + d.best_cosine, (d.latency_ms / 1000).toFixed(1) + "s"];
+    if (d.uncited_sentences) bits.push(d.uncited_sentences + " uncited sentence(s)");
+    if (d.invalid_citations && d.invalid_citations.length)
+      bits.push("invented citations: " + d.invalid_citations.join(", "));
+    $("out").innerHTML =
+      '<div class="answer ' + d.mode + '">' + banner +
+      '<div class="text">' + esc(d.answer) + "</div>" + cites +
+      '<div class="meta">' + bits.join(" · ") + "</div></div>";
+  }
+</script>

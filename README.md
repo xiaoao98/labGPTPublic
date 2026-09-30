@@ -335,6 +335,48 @@ without it:
 LABGPT_RERANK=on uv run python demo.py
 ```
 
+## Serving it to other people
+
+`serve.py` puts the same pipeline behind one endpoint and one page, for a lab that wants
+to ask questions without a terminal:
+
+```bash
+export LABGPT_API_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(24))")
+export LABGPT_LOG_PATH=/srv/labgpt/qa.jsonl
+uv run --extra serve uvicorn serve:app --host 0.0.0.0 --port 8080
+```
+
+- `GET /` the page, `POST /ask` the endpoint, `GET /health` what the process loaded
+- every request carries `X-LabGPT-Token`, checked in constant time. The service refuses to
+  start without `LABGPT_API_TOKEN` rather than defaulting to open: a service answering
+  from an institutional corpus should not come up unauthenticated because a variable was
+  unset
+- one worker on purpose. The index is loaded once and held; the wait in a request is the
+  endpoint call, which is I/O, so a thread pool serves a lab and more workers would only
+  multiply the index in memory
+
+The page renders the four outcomes differently, which is the point rather than decoration:
+a sourced answer with its citations, an unsourced one behind an amber banner saying it is
+not the lab's documentation, and refusals and withheld drafts in grey. Rendering an
+unsourced answer like a sourced one removes the only thing separating general advice from
+lab practice.
+
+The endpoint is the server's, configured with the `AZURE_OPENAI_*` variables the service
+is started with. Callers send questions and nothing else: no key is typed into the page,
+so none travels from a browser and none sits in anyone's `localStorage`. Usage is billed
+to whichever subscription the service was started with.
+
+Two secrets still cross the network in the clear if this is served over plain `http://`:
+the access token, on every request, and the corpus itself, in every answer. That is
+tolerable between a browser and `127.0.0.1` and much less so across a lab network, so put
+TLS in front of it before the address is shared.
+
+`LABGPT_LOG_PATH` records every question and answer as JSONL. That is what makes it
+possible to see what people actually ask and which questions get refused, and it also
+means the file quotes the corpus back verbatim and records who wanted to know what. Keep
+it on the server, readable by the account that runs the service, and out of any backup
+that leaves the building.
+
 ## Where generation happens
 
 Retrieval is always local. Only the generation call changes, so every configuration below
