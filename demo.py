@@ -32,17 +32,24 @@ alongside, which keeps the behaviour at a fraction of the tokens.
 
 The old per-domain scripts still work on their own: protocolDemo.py, safetyDemo.py,
 memberInfoDemo.py, paperDemo.py. They are unchanged and still stuff their own corpus.
+
+WHERE GENERATION HAPPENS. Retrieval is always local. The answer comes from a hosted
+endpoint by default, the institutional Azure OpenAI gateway in practice, or from a local
+transformers model when LABGPT_BACKEND=local asks for one. See BACKEND below.
+
+The web search leg is part of the local path only. On the endpoint path it is skipped
+entirely, along with the classifier call that gates it, so an api run answers from the
+retrieved corpus and nothing else.
 """
 
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
 import os
 from rich import print as rprint
 import labgpt_config as cfg
 import labgpt_metrics as metrics
 
 from labrag.answerer import (
-    DEFAULT_ABSTAIN_COSINE, TransformersChatClient, should_abstain,
-    validate_citations, count_uncited_sentences,
+    DEFAULT_ABSTAIN_COSINE, TransformersChatClient, chat_client_from_env,
+    should_abstain, validate_citations, count_uncited_sentences,
 )
 from labrag.embeddings import Embedder
 from labrag.prompts import ABSTENTION_TEMPLATE, build_messages
@@ -88,6 +95,127 @@ MEMBER_FLOOR = DEFAULT_ABSTAIN_COSINE
 
 INDEX_DIR = os.environ.get("LABGPT_INDEX_DIR", str(cfg.REPO_ROOT / ".index"))
 
+# Which model answers: "api" calls a hosted endpoint, "local" loads cfg.MODEL_NAME with
+# transformers. The endpoint is the default, and the local model is opt-in.
+#
+# The default is the endpoint because it is what this lab actually answers on: the local
+# 32B model needs a GPU that is not always at hand, where the approved Azure deployment is
+# reachable from any machine on the network. Nothing about that choice is automatic, which
+# is the point of naming it here rather than sniffing the environment: an unset variable
+# should not silently move generation from one to the other.
+#
+# The local path is still the only configuration in which nothing leaves the machine, and
+# it is one variable away. The api path needs an endpoint approved for this data, which the
+# institutional Azure OpenAI gateway is and a personal OpenAI key is not;
+# chat_client_from_env prefers Azure whenever its variables are set, so on a machine
+# configured for both the approved endpoint wins without anyone remembering a flag.
+BACKEND = os.environ.get("LABGPT_BACKEND", "api")
+
+
+class LocalBackend:
+    """cfg.MODEL_NAME, loaded once and reused for every call in the session."""
+
+    streams = True
+    web_search = True
+
+    def __init__(self):
+        # Imported here, not at module scope, so the api path runs on a machine with no
+        # transformers and no torch installed at all.
+        from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
+
+        self._TextStreamer = TextStreamer
+        rprint(f"[dim]loading {model_name} ...[/dim]")
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name, torch_dtype="auto", device_map="auto"
+        )
+
+    def describe(self) -> str:
+        return f"local {model_name}"
+
+    def client(self, max_tokens: int, stream: bool = False, thinking: bool = False):
+        streamer = None
+        if stream:
+            streamer = self._TextStreamer(self.tokenizer, skip_prompt=True,
+                                          skip_special_tokens=True)
+        return TransformersChatClient(self.tokenizer, self.model,
+                                      max_new_tokens=max_tokens, thinking=thinking,
+                                      streamer=streamer)
+
+
+class ApiBackend:
+    """A hosted OpenAI-compatible endpoint, Azure OpenAI included.
+
+    A fresh client per call, because the token budget differs per call and the clients are
+    cheap to construct; each one keeps only its configuration.
+
+    The budget has a floor here that the local path does not need. A reasoning model
+    spends its reasoning tokens out of the same allowance and spends them first, so the
+    8-token budget that is ample for a local model writing "yes" returns an empty string
+    from gpt-5 with nothing left to answer with.
+    """
+
+    streams = False
+    # No web leg on this path. The web branch exists to reach what the corpus does not
+    # cover, and it costs a classifier call on every single question plus, when it fires,
+    # a browser driver and several page fetches. On the endpoint path that trade is not
+    # taken: the endpoint is asked about the retrieved corpus and nothing else, which also
+    # means a question routed to the web cannot quietly send its text out through a second
+    # channel that was never part of the approved one.
+    web_search = False
+    MIN_TOKENS = 64
+
+    def __init__(self):
+        self.reasoning_effort = os.environ.get("LABGPT_REASONING_EFFORT") or None
+        if not _endpoint_configured():
+            # Reported here rather than as a 401 from api.openai.com on the first question,
+            # which is what an unconfigured OpenAI-shaped client would produce.
+            raise SystemExit(
+                "no chat endpoint is configured, and the api backend is the default.\n"
+                "  For the institutional Azure gateway, set AZURE_OPENAI_GATEWAY, "
+                "AZURE_OPENAI_TEAM_ID,\n"
+                "  AZURE_OPENAI_MODEL_ID, AZURE_OPENAI_API_VERSION and "
+                "APIM_OPENAI_SUBSCRIPTION_KEY;\n"
+                "  check them with python -m labrag.cli selftest.\n"
+                "  For another endpoint, set LABGPT_LLM_BASE_URL and LABGPT_LLM_API_KEY.\n"
+                f"  To answer on the local model instead: "
+                f"LABGPT_BACKEND=local python demo.py"
+            )
+        # Constructed once here, purely so that a misconfigured endpoint fails now rather
+        # than after the index has loaded and the first question has been typed.
+        probe = chat_client_from_env(max_tokens=MAX_NEW_TOKENS_ANSWER)
+        self._kind = type(probe).__name__
+        self._model = probe.model
+
+    def describe(self) -> str:
+        return f"{self._kind} {self._model}"
+
+    def client(self, max_tokens: int, stream: bool = False, thinking: bool = False):
+        # stream and thinking are accepted to match LocalBackend and ignored: an endpoint
+        # is asked for a complete response, and a hosted model's reasoning is controlled
+        # by reasoning_effort rather than by a chat-template flag.
+        return chat_client_from_env(max_tokens=max(max_tokens, self.MIN_TOKENS),
+                                    reasoning_effort=self.reasoning_effort)
+
+
+def _endpoint_configured() -> bool:
+    """Whether anything at all names an endpoint to call."""
+    return bool(os.environ.get("AZURE_OPENAI_ENDPOINT")
+                or (os.environ.get("AZURE_OPENAI_GATEWAY")
+                    and os.environ.get("AZURE_OPENAI_TEAM_ID"))
+                or os.environ.get("LABGPT_LLM_BASE_URL")
+                or os.environ.get("LABGPT_LLM_API_KEY")
+                or os.environ.get("OPENAI_API_KEY"))
+
+
+def build_backend():
+    """The backend BACKEND asks for. The endpoint unless the local model was asked for."""
+    if BACKEND == "local":
+        return LocalBackend()
+    if BACKEND != "api":
+        raise SystemExit(f"LABGPT_BACKEND must be api or local, not {BACKEND!r}")
+    return ApiBackend()
+
 ifSearchContent = (
     "Search is NEEDED (true) for: 1. Real-time information: Weather, stock prices, "
     "traffic, sports scores. 2. Recent events: Anything that happened after your "
@@ -112,10 +240,13 @@ def run_chat() -> None:
     embedder = Embedder(store.manifest.get("embedding_model"))
     retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=TOP_K)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name, torch_dtype="auto", device_map="auto"
-    )
+    try:
+        backend = build_backend()
+    except Exception as exc:
+        rprint(f"[red]{exc}[/red]")
+        return
+    rprint(f"[dim]model: {backend.describe()}[/dim]")
+
     if os.name != "nt":
         try:
             import readline  # noqa: F401
@@ -139,10 +270,10 @@ def run_chat() -> None:
         if not query.strip():
             continue
 
-        answer_query(query, retriever, tokenizer, model)
+        answer_query(query, retriever, backend)
 
 
-def answer_query(query, retriever, tokenizer, model) -> None:
+def answer_query(query, retriever, backend) -> None:
     rprint(f"[green]{cfg.ASSISTANT_NAME}: [/green]")
 
     # --- retrieve -------------------------------------------------------------
@@ -167,9 +298,9 @@ def answer_query(query, retriever, tokenizer, model) -> None:
     # --- optional web search --------------------------------------------------
     sources = list(result.documents)
     web_summary = None
-    if _needs_web_search(query, tokenizer, model):
+    if backend.web_search and _needs_web_search(query, backend):
         rprint("[blue]Searching the web ...[/blue]")
-        web_summary = _summarise_web(query, tokenizer, model)
+        web_summary = _summarise_web(query, backend)
 
     # The directory is appended rather than competing for the main slots, so that the
     # "tell them who can help" behaviour survives without paying for the whole of it.
@@ -199,13 +330,18 @@ def answer_query(query, retriever, tokenizer, model) -> None:
             f"numbered sources and must not be cited as one:\n{web_summary}"
         )
 
-    streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
-    client = TransformersChatClient(
-        tokenizer, model, max_new_tokens=MAX_NEW_TOKENS_ANSWER, streamer=streamer
-    )
+    # The local backend streams as it generates, so the answer is already on screen by the
+    # time complete() returns. An endpoint returns it whole, and it is printed below.
+    client = backend.client(MAX_NEW_TOKENS_ANSWER, stream=True)
 
-    with metrics.timer() as elapsed:
-        text, usage = client.complete(messages)
+    try:
+        with metrics.timer() as elapsed:
+            text, usage = client.complete(messages)
+    except Exception as exc:
+        rprint(f"[red]generation failed: {exc}[/red]")
+        return
+    if not backend.streams:
+        print(text)
     metrics.record(
         "answer",
         prompt_tokens=usage.get("prompt_tokens", 0),
@@ -240,20 +376,22 @@ def answer_query(query, retriever, tokenizer, model) -> None:
 # --- web search ---------------------------------------------------------------
 
 
-def _needs_web_search(query, tokenizer, model) -> bool:
+def _needs_web_search(query, backend) -> bool:
     """The one classifier call left. It gates a real external call, so it earns its cost.
 
     The other two are gone. Retrieval decides what the query is about by scoring the
     corpus, which is both cheaper and measurable, where the classifiers were neither.
+
+    Only reached on a backend whose web_search is set, which today means the local one.
     """
     answer = _short_answer(
-        ifSearchContent + query, tokenizer, model,
+        ifSearchContent + query, backend,
         max_new_tokens=MAX_NEW_TOKENS_YESNO, label="classify:web",
     )
     return "yes" in answer.lower()
 
 
-def _summarise_web(query, tokenizer, model):
+def _summarise_web(query, backend):
     # Imported here rather than at module scope so the assistant starts without the
     # search extra installed. Web search is optional; selenium and a browser driver are
     # a heavy thing to require of a deployment that only wants to answer from the corpus.
@@ -283,17 +421,19 @@ def _summarise_web(query, tokenizer, model):
         prompt += (f"\n--- result {index + 1} ---\nURL: {item['url']}\n"
                    f"Snippet: {snippet}\nContent: {item['content']}\n")
 
-    return _short_answer(prompt, tokenizer, model, max_new_tokens=512,
+    return _short_answer(prompt, backend, max_new_tokens=512,
                          label="web_summary", thinking=False)
 
 
-def _short_answer(prompt, tokenizer, model, max_new_tokens, label, thinking=False) -> str:
-    """One deterministic generation, instrumented. Sampling is off so routing is
-    reproducible; otherwise the same question can take different paths on different runs.
+def _short_answer(prompt, backend, max_new_tokens, label, thinking=False) -> str:
+    """One generation, instrumented.
+
+    Deterministic on the local backend, where sampling is off, so routing is reproducible.
+    Not on a hosted one: a reasoning model refuses any temperature but its default, so the
+    same question can take different paths on different runs and a comparison across runs
+    has to treat the routing as noisy.
     """
-    client = TransformersChatClient(
-        tokenizer, model, max_new_tokens=max_new_tokens, thinking=thinking
-    )
+    client = backend.client(max_new_tokens, thinking=thinking)
     try:
         with metrics.timer() as elapsed:
             text, usage = client.complete([{"role": "user", "content": prompt}])
