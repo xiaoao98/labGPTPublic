@@ -47,6 +47,35 @@ def normalize(matrix):
     return (matrix / norms).astype("float32")
 
 
+def resolve_model(recorded: str | None) -> str:
+    """The model to load, given the name an index recorded when it was built.
+
+    LABGPT_EMBED_MODEL wins over the recorded name. That inversion is deliberate: the
+    recorded name is a hub id, and the variable names a directory holding the same weights
+    fetched by hand, which is the only way onto a machine whose network blocks the hub.
+    Nothing in the files themselves can prove the two are the same model, so setting the
+    variable is the assertion that they are, and the basenames are compared below to catch
+    the obvious mistake rather than to verify the claim.
+    """
+    override = os.environ.get("LABGPT_EMBED_MODEL")
+    if not override:
+        return recorded or DEFAULT_MODEL
+    if recorded and not _same_model_family(override, recorded):
+        print(f"warning: LABGPT_EMBED_MODEL is {override}, but this index was built by "
+              f"{recorded}.\n"
+              f"  Loading the override anyway. Scores from a different embedding model are "
+              f"not comparable\n"
+              f"  with the vectors in the index, and retrieval will be quietly wrong "
+              f"rather than broken.")
+    return override
+
+
+def _same_model_family(override: str, recorded: str) -> bool:
+    """Whether a path and a hub id plausibly name the same model, by final path segment."""
+    tail = override.rstrip("/").replace("\\", "/").rsplit("/", 1)[-1].lower()
+    return tail == recorded.rsplit("/", 1)[-1].lower()
+
+
 def _looks_like_unreachable_hub(exc: Exception) -> bool:
     """Whether a load failure was the network rather than the model.
 
@@ -77,9 +106,14 @@ class Embedder:
             try:
                 from sentence_transformers import SentenceTransformer
             except ImportError as exc:
+                # The original message is carried through rather than replaced. This also
+                # fires when the package is installed but its own dependencies conflict
+                # (transformers pinning huggingface-hub, most often), and "pip install
+                # sentence-transformers" is useless advice for that, while the underlying
+                # ImportError names the two versions that disagree.
                 raise RuntimeError(
-                    "embeddings need sentence-transformers.\n"
-                    "  pip install sentence-transformers"
+                    f"embeddings need a working sentence-transformers: {exc}\n"
+                    f"  pip install -U sentence-transformers, or uv sync"
                 ) from exc
             print(f"loading embedding model {self.model_name} ...")
             try:

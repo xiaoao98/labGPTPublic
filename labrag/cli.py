@@ -29,7 +29,7 @@ from .answerer import (  # noqa: E402
 )
 from .chunker import write_chunks  # noqa: E402
 from .documents import write_documents  # noqa: E402
-from .embeddings import DEFAULT_MODEL, Embedder  # noqa: E402
+from .embeddings import DEFAULT_MODEL, Embedder, resolve_model  # noqa: E402
 from .evaluate import (  # noqa: E402
     abstention_separation, aggregate, by_category, check_labels, evaluate, load_questions,
 )
@@ -96,7 +96,7 @@ def cmd_search(args) -> int:
     store = VectorStore.load(args.index_dir)
     embedder = None
     if args.mode in ("dense", "hybrid"):
-        embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+        embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
 
     retriever = Retriever(
         store,
@@ -143,7 +143,7 @@ def cmd_search(args) -> int:
 
 def cmd_ask(args) -> int:
     store = VectorStore.load(args.index_dir)
-    embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+    embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
     retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=args.k)
 
     result = retriever.retrieve(args.question, k=args.k)
@@ -269,7 +269,7 @@ def cmd_answer_all(args) -> int:
         print("nothing to do")
         return 0
 
-    embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+    embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
     retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=args.k)
     answerer = Answerer(retriever, client=_client(args), k=args.k,
                         abstain_cosine=args.threshold)
@@ -336,7 +336,7 @@ HEADER = f"{'':<22}{'n':>4}{'S@1':>9}{'S@5':>9}{'R@5':>9}{'R@10':>10}{'MRR':>8}{
 def _build(store, mode, args, weight_lexical=1.0):
     embedder = None
     if mode in ("dense", "hybrid"):
-        embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+        embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
     return Retriever(store, embedder=embedder, mode=mode, final_k=10,
                      weight_lexical=weight_lexical)
 

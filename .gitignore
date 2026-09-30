@@ -58,3 +58,7 @@ eval/questions_lab.yaml
 # Generated answer runs. Answers over the private corpus quote it back verbatim, so the
 # output is as sensitive as the input that produced it, whichever corpus that was.
 runs/
+
+# Embedding model fetched by hand, for machines whose network blocks the hub.
+# Weights, not source: 383 MB with both the safetensors and the .bin copy.
+bge-small-en-v1.5/

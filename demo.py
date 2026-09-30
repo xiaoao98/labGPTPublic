@@ -51,7 +51,7 @@ from labrag.answerer import (
     DEFAULT_ABSTAIN_COSINE, TransformersChatClient, chat_client_from_env,
     should_abstain, validate_citations, count_uncited_sentences,
 )
-from labrag.embeddings import Embedder
+from labrag.embeddings import Embedder, resolve_model
 from labrag.prompts import ABSTENTION_TEMPLATE, build_messages
 from labrag.retriever import Retriever
 from labrag.store import VectorStore
@@ -237,7 +237,7 @@ def run_chat() -> None:
         return
 
     rprint(f"[dim]index: {len(store.documents)} documents, {len(store.chunks)} chunks[/dim]")
-    embedder = Embedder(store.manifest.get("embedding_model"))
+    embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
     retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=TOP_K)
 
     try:
