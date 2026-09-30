@@ -52,7 +52,9 @@ from labrag.answerer import (
     should_abstain, validate_citations, count_uncited_sentences,
 )
 from labrag.embeddings import Embedder, resolve_model
-from labrag.prompts import ABSTENTION_TEMPLATE, build_messages
+from labrag.prompts import (
+    ABSTENTION_TEMPLATE, build_messages, build_messages_without_sources,
+)
 from labrag.retriever import Retriever
 from labrag.store import VectorStore
 
@@ -110,6 +112,24 @@ INDEX_DIR = os.environ.get("LABGPT_INDEX_DIR", str(cfg.REPO_ROOT / ".index"))
 # chat_client_from_env prefers Azure whenever its variables are set, so on a machine
 # configured for both the approved endpoint wins without anyone remembering a flag.
 BACKEND = os.environ.get("LABGPT_BACKEND", "api")
+
+# What happens when retrieval scores below the abstention threshold. "answer" puts the
+# question to the model with no sources attached and labels the result as general
+# knowledge; "refuse" stops at the gate, which is what this pipeline did before.
+#
+# The refusal exists because an unsupported answer about a centrifuge speed or a spill is
+# worse than no answer: it reads as verified. Answering anyway gives that back some of the
+# ground it was standing on, so the fallback is built to keep the boundary visible rather
+# than to blur it. No sources are supplied, so no [S#] can be emitted and citation
+# validation is skipped; the prompt is a different one that opens by saying the lab's
+# documentation does not cover this, refuses to state lab specifics it does not have, and
+# sends anything urgent to a person. The transcript marks the whole answer as unsourced.
+#
+# The second gate is untouched. An answer that was given sources and cited none of them is
+# still withheld: that is a model ignoring its evidence, not a gap in the corpus.
+ABSTAIN_MODE = os.environ.get("LABGPT_ABSTAIN_MODE", "answer")
+if ABSTAIN_MODE not in ("answer", "refuse"):
+    raise SystemExit(f"LABGPT_ABSTAIN_MODE must be answer or refuse, not {ABSTAIN_MODE!r}")
 
 
 class LocalBackend:
@@ -308,9 +328,11 @@ def answer_query(query, retriever, backend) -> None:
            f"{len(result.documents)} documents[/dim]")
 
     if abstain:
-        # Refusing here costs nothing and is a correct answer for a safety corpus. The
-        # model is never called, so it cannot improvise around the gap.
-        rprint(f"[yellow]{ABSTENTION_TEMPLATE.format(reason=f'Reason: {reason}.')}[/yellow]")
+        if ABSTAIN_MODE == "refuse":
+            # The model is never called, so it cannot improvise around the gap.
+            rprint(f"[yellow]{ABSTENTION_TEMPLATE.format(reason=f'Reason: {reason}.')}[/yellow]")
+            return
+        _answer_without_sources(query, backend, reason)
         return
 
     # --- optional web search --------------------------------------------------
@@ -389,6 +411,47 @@ def answer_query(query, retriever, backend) -> None:
     uncited = count_uncited_sentences(text)
     if uncited:
         rprint(f"[yellow]  {uncited} factual sentence(s) carried no citation[/yellow]")
+
+
+def _answer_without_sources(query, backend, reason: str) -> None:
+    """Answer with nothing retrieved, labelled as general knowledge.
+
+    Reached only when the retrieval gate failed, and only when LABGPT_ABSTAIN_MODE leaves
+    it enabled. Nothing here is checked against the corpus, because there is no corpus
+    content in the prompt; the banner and the prompt's own first rule are what keep the
+    answer from being read as the lab's documented practice.
+    """
+    rprint(f"[yellow]Nothing in the indexed lab documentation matched this "
+           f"({reason}).[/yellow]")
+    rprint("[yellow]Answering from general knowledge instead. This is NOT this lab's "
+           "documented practice, and it carries no citations.[/yellow]\n")
+
+    client = backend.client(backend.answer_tokens, stream=True)
+    try:
+        with metrics.timer() as elapsed:
+            text, usage = client.complete(build_messages_without_sources(query))
+    except Exception as exc:
+        rprint(f"[red]generation failed: {exc}[/red]")
+        return
+    if not backend.streams:
+        print(text)
+    metrics.record(
+        "answer:unsourced",
+        prompt_tokens=usage.get("prompt_tokens", 0),
+        generated_tokens=usage.get("completion_tokens", 0),
+        elapsed_s=elapsed[0],
+        sources=0,
+        best_cosine=0.0,
+    )
+
+    # Citations are not validated, because none were possible. A model that emitted one
+    # anyway invented it, and saying so is the whole point of checking.
+    _, invented = validate_citations(text, 0)
+    if invented:
+        rprint(f"\n[red]the answer cited {invented}, but no sources were supplied; "
+               f"those citations are invented[/red]")
+    rprint("\n[yellow]Unsourced answer. Confirm anything lab-specific with the protocol "
+           "owner or the safety officer.[/yellow]")
 
 
 # --- web search ---------------------------------------------------------------

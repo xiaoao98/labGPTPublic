@@ -22,7 +22,8 @@ query
   |     fused with reciprocal rank fusion   -> top k documents
   |
   +-- abstention gate on the retrieval cosine, before a token is spent
-  |     below it, refuse here; the model is never called
+  |     below it -> ask the model with NO sources, labelled as general knowledge
+  |                 (LABGPT_ABSTAIN_MODE=refuse stops here instead)
   |
   +-- local backend only:
   |     classify: does this need web search?   (1 LLM call, gates a real external call)
@@ -42,9 +43,33 @@ call that gates it, so it answers from the retrieved corpus and nothing else: no
 text leaves through a second channel, and no question pays for a classifier call whose
 answer would be ignored.
 
-Every answer carries `[S#]` markers, each checked after generation against the sources
-that were actually supplied. An answer citing a source that was never given is withheld
-rather than served, because in this domain invented provenance reads as verified.
+Every sourced answer carries `[S#]` markers, each checked after generation against the
+sources that were actually supplied. An answer citing a source that was never given is
+withheld rather than served, because in this domain invented provenance reads as verified.
+
+### When retrieval finds nothing
+
+Below the threshold there are no sources to ground an answer in, and the pipeline takes
+the question to the model anyway, with nothing attached. That answer is general knowledge,
+not this lab's documented practice, and the difference is what the handling is built
+around:
+
+- a different system prompt, which opens by saying the lab's documentation does not cover
+  this, refuses to state lab specifics it does not have (protocol parameters, catalog
+  numbers, storage locations, who is responsible for what), sends anything urgent to the
+  safety officer rather than improvising a procedure, and emits no citations
+- a banner before and after it in the transcript, marking the whole answer as unsourced
+- no citation validation, since nothing was supplied to cite. A `[S#]` that appears anyway
+  is reported as invented
+- recorded as `answer:unsourced` in the metrics, so the two kinds of answer can be counted
+  separately
+
+`LABGPT_ABSTAIN_MODE=refuse` restores the older behaviour, where the gate stops and the
+model is never called. Which one is right depends on the corpus: refusing is safer for a
+question about a spill, and unhelpful for a question the lab simply never wrote down.
+
+The second gate is unaffected. An answer that *was* given sources and cited none of them
+is still withheld: that is a model ignoring its evidence rather than a gap in the corpus.
 
 ## Setup
 
@@ -268,6 +293,7 @@ copy `.env.example` to `.env`:
 | `LABGPT_ASSISTANT_NAME` | `LabGPT` | Name shown in the chat prompt |
 | `LABGPT_METRICS` | unset | Path to write per-call metrics JSONL; off when unset |
 | `LABGPT_BACKEND` | `api` | `api` or `local`; which model answers |
+| `LABGPT_ABSTAIN_MODE` | `answer` | `answer` (unsourced fallback) or `refuse` (stop at the gate) |
 | `LABGPT_INDEX_DIR` | `.index` | Where `demo.py` looks for the index |
 | `LABGPT_EMBED_MODEL` | `BAAI/bge-small-en-v1.5` | Embedding model, or a local directory holding it |
 | `LABGPT_REASONING_EFFORT` | `low` in `demo.py`, endpoint default in the CLI | `minimal`/`low`/`medium`/`high`; reasoning deployments only |
