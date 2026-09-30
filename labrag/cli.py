@@ -602,7 +602,11 @@ def main(argv=None) -> int:
     p_search.set_defaults(func=cmd_search)
 
     p_eval = sub.add_parser("eval", help="score retrieval against the labeled question set")
-    p_eval.add_argument("--questions", default=Path(cfg.REPO_ROOT) / "eval" / "questions.yaml")
+    # questions_public.yaml is the set that ships. The lab set is gitignored, and the
+    # older questions.yaml it superseded was removed once its labels stopped matching any
+    # corpus in the tree.
+    p_eval.add_argument("--questions",
+                        default=Path(cfg.REPO_ROOT) / "eval" / "questions_public.yaml")
     p_eval.add_argument("--mode", default="hybrid", choices=("dense", "bm25", "hybrid"))
     p_eval.add_argument("--failures", action="store_true", help="list total misses")
     p_eval.add_argument("--top-k-dense", type=int, default=20,
@@ -620,7 +624,8 @@ def main(argv=None) -> int:
     p_eval.set_defaults(func=cmd_eval)
 
     p_sweep = sub.add_parser("sweep", help="compare retrieval configurations")
-    p_sweep.add_argument("--questions", default=Path(cfg.REPO_ROOT) / "eval" / "questions.yaml")
+    p_sweep.add_argument("--questions",
+                         default=Path(cfg.REPO_ROOT) / "eval" / "questions_public.yaml")
     p_sweep.add_argument("--top-k-dense", type=int, default=20,
                         help="candidates the dense leg returns before fusion")
     p_sweep.add_argument("--top-k-lexical", type=int, default=20,

@@ -58,8 +58,10 @@ data/eval/*
 # The question set built over that corpus. Excluded for the same reason the corpus is:
 # each question carries a note recording the answer it was labeled against, so the file
 # is a few hundred short extracts from the private documents even though it holds none
-# of them whole. eval/questions.yaml stays tracked; its corpus is published protocols.
+# of them whole. Only eval/questions_public.yaml is tracked: it is the set built to have
+# nothing private in it, and it is the default the cli points at.
 eval/questions_lab.yaml
+eval/questions.yaml
 
 # Generated answer runs. Answers over the private corpus quote it back verbatim, so the
 # output is as sensitive as the input that produced it, whichever corpus that was.
