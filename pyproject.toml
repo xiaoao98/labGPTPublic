@@ -6,15 +6,31 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 
-# Everything needed to build the index, retrieve, and evaluate. sentence-transformers
-# pulls torch and transformers in anyway, but rerank.py imports both directly, so they
-# are declared rather than relied on transitively.
+# Everything needed to build the index, retrieve, evaluate, and answer. rerank.py imports
+# torch and transformers directly rather than relying on sentence-transformers to pull
+# them in, and demo.py needs rich for the chat loop.
 dependencies = [
     "pyyaml>=6.0",
     "numpy>=1.24",
     "sentence-transformers>=3.0",
     "transformers>=4.44",
     "torch>=2.2",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+# demo.py's web search branch, which runs on the local backend only. The api backend
+# skips that leg entirely, so an endpoint-only deployment does not need any of this.
+# Only the two modules demo.py imports were kept when the repository was cut down to the
+# retrieval path, so this is narrower than it was: no Google API, no scrapegraphai.
+search = [
+    "requests>=2.31",
+    "ddgs>=9.0",
+    "beautifulsoup4>=4.12",
+    "readability-lxml>=0.8.1",
+    "lxml>=5.0",
+    "selenium>=4.20",
+    "webdriver-manager>=4.0",
 ]
 
 [build-system]
@@ -25,4 +41,4 @@ build-backend = "setuptools.build_meta"
 # paths are also read by the scripts in tools/, which run from the repository root.
 [tool.setuptools]
 packages = ["labrag"]
-py-modules = ["labgpt_config"]
+py-modules = ["labgpt_config", "labgpt_metrics"]

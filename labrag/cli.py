@@ -24,11 +24,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import labgpt_config as cfg  # noqa: E402
 
 from .answerer import (  # noqa: E402
-    Answerer, ChatClient, DEFAULT_ABSTAIN_COSINE, LLMError, should_abstain,
+    Answerer, DEFAULT_ABSTAIN_COSINE, LLMError, chat_client_from_env, should_abstain,
 )
 from .chunker import write_chunks  # noqa: E402
 from .documents import write_documents  # noqa: E402
-from .embeddings import DEFAULT_MODEL, Embedder  # noqa: E402
+from .embeddings import DEFAULT_MODEL, Embedder, resolve_model  # noqa: E402
 from .evaluate import (  # noqa: E402
     SERVED_K,
     abstention_separation, aggregate, by_category, check_labels, evaluate, load_questions,
@@ -99,7 +99,7 @@ def cmd_search(args) -> int:
     store = VectorStore.load(args.index_dir)
     embedder = None
     if args.mode in ("dense", "hybrid"):
-        embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+        embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
 
     retriever = Retriever(
         store,
@@ -146,7 +146,7 @@ def cmd_search(args) -> int:
 
 def cmd_ask(args) -> int:
     store = VectorStore.load(args.index_dir)
-    embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+    embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
     retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=args.k,
                           reranker=_reranker(args),
                           rerank_candidates=getattr(args, "rerank_candidates", 40))
@@ -196,11 +196,44 @@ def cmd_ask(args) -> int:
     return 0
 
 
+# The same two variables demo.py reads, so a shell configured for one is configured for
+# both.
+#
+# 2500 is measured rather than guessed, and the measurement is on the parser arguments
+# below: over 101 real questions with retrieved context, low effort spent a median of 192
+# reasoning tokens, 448 at the 90th percentile and 704 at the worst successful call, while
+# a 800-token budget left seventeen questions with nothing written at all. The budget is a
+# cap rather than a spend, so the headroom costs nothing on a model that does not use it.
+DEFAULT_MAX_TOKENS = int(os.environ.get("LABGPT_MAX_TOKENS") or 2500)
+REASONING_EFFORTS = ("minimal", "low", "medium", "high")
+
+
+def _default_effort():
+    """LABGPT_REASONING_EFFORT, rejected here rather than by the endpoint as a 400."""
+    effort = os.environ.get("LABGPT_REASONING_EFFORT") or None
+    if effort is not None and effort not in REASONING_EFFORTS:
+        raise SystemExit(f"LABGPT_REASONING_EFFORT must be one of "
+                         f"{', '.join(REASONING_EFFORTS)}, not {effort!r}")
+    return effort
+
+
 def _client(args):
-    """The chat client these arguments ask for."""
-    return ChatClient(model=args.model, base_url=getattr(args, "base_url", None),
-                      max_tokens=args.max_tokens,
-                      reasoning_effort=args.reasoning_effort)
+    """The chat client these arguments ask for.
+
+    Through chat_client_from_env rather than ChatClient directly, so that restoring the
+    Azure client to answerer.py actually puts it on the path: the endpoint is chosen by
+    which variables are set, and Azure wins when its are, so institutional text does not
+    reach a personal key because a flag was forgotten.
+
+    base_url is only meaningful for the OpenAI-shaped client; an Azure endpoint is
+    assembled from the deployment and api-version instead, so it is passed only when it
+    would be used.
+    """
+    kwargs = {"max_tokens": args.max_tokens, "reasoning_effort": args.reasoning_effort}
+    if getattr(args, "base_url", None):
+        kwargs["base_url"] = args.base_url
+    return chat_client_from_env(model=getattr(args, "model", None),
+                                provider=getattr(args, "provider", "auto"), **kwargs)
 
 
 def _oracle_documents(retriever, store, question, k):
@@ -315,7 +348,7 @@ def cmd_answer_all(args) -> int:
         print("nothing to do")
         return 0
 
-    embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+    embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
     retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=args.k,
                           reranker=_reranker(args),
                           rerank_candidates=getattr(args, "rerank_candidates", 40))
@@ -390,7 +423,7 @@ HEADER = f"{'':<22}{'n':>4}{'S@1':>9}{'S@6':>9}{'R@6':>9}{'R@10':>10}{'MRR':>8}{
 def _build(store, mode, args, weight_lexical=1.0):
     embedder = None
     if mode in ("dense", "hybrid"):
-        embedder = Embedder(store.manifest.get("embedding_model", DEFAULT_MODEL))
+        embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
     return Retriever(store, embedder=embedder, mode=mode, final_k=10,
                      weight_lexical=weight_lexical,
                      top_k_dense=getattr(args, "top_k_dense", 20),
@@ -400,17 +433,20 @@ def _build(store, mode, args, weight_lexical=1.0):
 
 
 def _rerank_wanted(args) -> bool:
-    """Whether to rerank, with the default decided by the hardware.
+    """Whether to rerank. Off unless asked for.
 
-    The pass is worth roughly three end-to-end questions in a hundred and costs 13.1
-    seconds a query on a CPU against 6.2 for generation, so on a CPU it is a bad default
-    and on a GPU it is a free one. --rerank and --no-rerank both override.
+    It used to follow the hardware, on where a GPU made it nearly free. Off is the simpler
+    contract: the pass downloads a second model, costs 13.1 seconds a query on a CPU
+    against 6.2 for generation, and buys about three end-to-end questions in a hundred at
+    n=100, which is inside the interval. A default that changes with the machine also
+    makes two runs incomparable without reading the header that says which one happened.
+
+    --rerank turns it on. --no-rerank is kept so a script can say off explicitly and stay
+    correct if the default ever moves again.
     """
     if getattr(args, "no_rerank", False):
         return False
-    if getattr(args, "rerank", False):
-        return True
-    return rerank_is_cheap()
+    return bool(getattr(args, "rerank", False))
 
 
 def _reranker(args):
@@ -569,7 +605,11 @@ def main(argv=None) -> int:
     p_search.set_defaults(func=cmd_search)
 
     p_eval = sub.add_parser("eval", help="score retrieval against the labeled question set")
-    p_eval.add_argument("--questions", default=Path(cfg.REPO_ROOT) / "eval" / "questions.yaml")
+    # questions_public.yaml is the set that ships. The lab set is gitignored, and the
+    # older questions.yaml it superseded was removed once its labels stopped matching any
+    # corpus in the tree.
+    p_eval.add_argument("--questions",
+                        default=Path(cfg.REPO_ROOT) / "eval" / "questions_public.yaml")
     p_eval.add_argument("--mode", default="hybrid", choices=("dense", "bm25", "hybrid"))
     p_eval.add_argument("--failures", action="store_true", help="list total misses")
     p_eval.add_argument("--top-k-dense", type=int, default=20,
@@ -587,7 +627,8 @@ def main(argv=None) -> int:
     p_eval.set_defaults(func=cmd_eval)
 
     p_sweep = sub.add_parser("sweep", help="compare retrieval configurations")
-    p_sweep.add_argument("--questions", default=Path(cfg.REPO_ROOT) / "eval" / "questions.yaml")
+    p_sweep.add_argument("--questions",
+                         default=Path(cfg.REPO_ROOT) / "eval" / "questions_public.yaml")
     p_sweep.add_argument("--top-k-dense", type=int, default=20,
                         help="candidates the dense leg returns before fusion")
     p_sweep.add_argument("--top-k-lexical", type=int, default=20,
@@ -609,10 +650,20 @@ def main(argv=None) -> int:
     p_ask.add_argument("--dry-run", action="store_true",
                        help="show the assembled prompt instead of calling a model")
     p_ask.add_argument("--show", type=int, default=2500, help="dry-run print limit")
-    p_ask.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini",
-                       help="chat model; also LABGPT_LLM_MODEL")
+    # Defaults to None rather than to a model name, and this is not cosmetic. The name
+    # given here is passed on as the *deployment* when the provider resolves to Azure,
+    # where it becomes a path segment. A default of "gpt-4o-mini" therefore silently
+    # overrode AZURE_OPENAI_MODEL_ID and requested a deployment that does not exist; an
+    # API Management gateway answers an unroutable path with a 401 about the subscription
+    # key, so the symptom pointed at the key rather than at the model name. Leaving it
+    # None lets chat_client_from_env pick the right per-provider source.
+    p_ask.add_argument("--model", default=None,
+                       help="chat model, or Azure deployment; also LABGPT_LLM_MODEL "
+                            "or AZURE_OPENAI_MODEL_ID")
     p_ask.add_argument("--base-url", default=None,
                        help="OpenAI-compatible endpoint; also LABGPT_LLM_BASE_URL")
+    p_ask.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"),
+                       help="auto prefers Azure when its variables are set")
     # Reasoning models spend this budget on thinking before writing anything, so it is a
     # ceiling on reasoning plus answer, not on answer length.
     #
@@ -621,10 +672,10 @@ def main(argv=None) -> int:
     # effort spent a median of 192 reasoning tokens, 448 at the 90th percentile and 704 at
     # the worst successful call, and seventeen questions consumed all 800 without writing
     # a word. 2500 leaves room for the worst of those plus a full cited answer.
-    p_ask.add_argument("--max-tokens", type=int, default=2500)
-    p_ask.add_argument("--reasoning-effort", default=None,
-                       choices=("minimal", "low", "medium", "high"),
-                       help="reasoning models only; omitted means the endpoint default")
+    p_ask.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    p_ask.add_argument("--reasoning-effort", default=_default_effort(),
+                       choices=REASONING_EFFORTS,
+                       help="reasoning models only; also LABGPT_REASONING_EFFORT")
     p_ask.add_argument("--no-rerank", action="store_true",
                         help="skip the reranking pass even where it is cheap")
     p_ask.add_argument("--rerank", action="store_true",
@@ -636,11 +687,14 @@ def main(argv=None) -> int:
     p_ask.set_defaults(func=cmd_ask)
 
     p_self = sub.add_parser("selftest", help="send one prompt, to check the endpoint")
-    p_self.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
+    p_self.add_argument("--model", default=None,
+                        help="chat model, or Azure deployment; also LABGPT_LLM_MODEL "
+                             "or AZURE_OPENAI_MODEL_ID")
     p_self.add_argument("--base-url", default=None)
-    p_self.add_argument("--max-tokens", type=int, default=512)
-    p_self.add_argument("--reasoning-effort", default=None,
-                        choices=("minimal", "low", "medium", "high"))
+    p_self.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
+    p_self.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    p_self.add_argument("--reasoning-effort", default=_default_effort(),
+                        choices=REASONING_EFFORTS)
     p_self.set_defaults(func=cmd_selftest)
 
     p_all = sub.add_parser("answer-all", help="answer a whole question set, to JSONL")
@@ -656,11 +710,14 @@ def main(argv=None) -> int:
                        help="fill the k slots with the labelled documents, bypassing the "
                             "confidence gate, to measure the generator with retrieval held "
                             "perfect")
-    p_all.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
+    p_all.add_argument("--model", default=None,
+                       help="chat model, or Azure deployment; also LABGPT_LLM_MODEL "
+                            "or AZURE_OPENAI_MODEL_ID")
     p_all.add_argument("--base-url", default=None)
-    p_all.add_argument("--max-tokens", type=int, default=2500)
-    p_all.add_argument("--reasoning-effort", default=None,
-                       choices=("minimal", "low", "medium", "high"))
+    p_all.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
+    p_all.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    p_all.add_argument("--reasoning-effort", default=_default_effort(),
+                       choices=REASONING_EFFORTS)
     p_all.add_argument("--no-rerank", action="store_true",
                         help="skip the reranking pass even where it is cheap")
     p_all.add_argument("--rerank", action="store_true",

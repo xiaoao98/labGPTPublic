@@ -28,6 +28,12 @@ REAGENTS_CSV = DATA_DIR / "reagents.csv"
 PAPERS_PATH = DATA_DIR / "papers.json"
 PAPER_CONTENT_PATH = DATA_DIR / "paper_content.json"
 
+# The local generation model, used only when demo.py runs on LABGPT_BACKEND=local. The
+# endpoint path does not read it, and neither does anything in labrag.
+MODEL_NAME = os.environ.get("LABGPT_MODEL", "Qwen/Qwen3-32B")
+
+ASSISTANT_NAME = os.environ.get("LABGPT_ASSISTANT_NAME", "LabGPT")
+
 
 def require(path):
     """Fail loudly and early when a corpus file is missing.

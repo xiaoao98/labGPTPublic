@@ -4,22 +4,28 @@ A laboratory knowledge assistant. It answers questions about lab protocols, reag
 safety guidance, team responsibilities and the lab's own publications.
 
 Indexing, retrieval and reranking run entirely on the machine holding the corpus, so
-nothing leaves during search. Generation calls an OpenAI-compatible endpoint, which means
-the handful of documents retrieved for a question do leave. Which endpoint that is decides
-what a private corpus is exposed to, and is the one deployment choice this repository
-cannot make for you.
+nothing leaves during search. Generation is the one step with a choice: an
+OpenAI-compatible endpoint, Azure OpenAI included, which means the handful of documents
+retrieved for a question do leave; or a local open-weights model, in which case nothing
+leaves at all. Which endpoint that is decides what a private corpus is exposed to, and is
+the deployment choice this repository cannot make for you.
+
+Two ways in: `labrag.cli` for indexing, retrieval, evaluation and batch answering, and
+`demo.py` for an interactive chat loop over the same index.
 
 Retrieval is hybrid: a local embedding model and a hand-written BM25, fused by reciprocal
-rank. Every answer cites the documents it came from, every citation is checked against the
-sources that were actually supplied, and the system refuses rather than guesses when
-retrieval comes back weak.
+rank. Every sourced answer cites the documents it came from, and every citation is checked
+against the sources that were actually supplied. When retrieval comes back weak the CLI
+refuses rather than guesses; the chat loop can instead answer from general knowledge, with
+the answer marked as not being the lab's documentation.
 
 The repository ships with a **synthetic corpus** in `data/sample`. Point it at a real
 corpus to run it for real.
 
 **Measured end to end on 100 labelled questions, answers graded by hand: 90% correct, or
-93% with reranking on.** The numbers, and what they do and do not establish, are in
-[Results](#results).
+93% with the optional reranking pass.** Reranking is off by default and turned on with
+`--rerank`, or `LABGPT_RERANK=on` for the chat loop. The numbers, and what they do and do
+not establish, are in [Results](#results).
 
 ## How it works
 
@@ -31,7 +37,7 @@ query
   |
   +-- reciprocal rank fusion            rank-based, not score-based
   |
-  +-- cross-encoder rerank              restores what fusion discarded, GPU only
+  +-- cross-encoder rerank              optional, off by default: --rerank
   |
   +-- expand chunks to documents        small-to-big, protocols served whole
   |
@@ -41,6 +47,14 @@ query
   |
   +-- citation validation               an answer with no valid citation is withheld
 ```
+
+`demo.py` runs the same pipeline with three additions, none of which the CLI has: the
+team directory is retrieved separately and appended above a relevance floor, so "who can
+help" survives without the directory competing for the main slots; a web search leg, gated
+by one classifier call and available on the local backend only; and, below the abstention
+threshold, an answer from general knowledge with no sources, labelled as such. That last
+one is a behavioural difference worth knowing about before comparing the two:
+[When retrieval finds nothing](#when-retrieval-finds-nothing).
 
 Chunks are what get scored and documents are what get returned. A query like "how long in
 the water bath" only matches if the body text is indexed, while a protocol handed back
@@ -61,7 +75,8 @@ that the document actually contains the answer its note claims. Generation by gp
 reasoning effort, six documents per query. Every answer was then read and graded by a
 person.
 
-**End to end, 90 of 100 correct, or 93 with the reranker on.** Both were graded by
+**End to end, 90 of 100 correct, or 93 with the reranker on.** Reranking is opt-in; the
+90 is what the shipped default produces. Both were graded by
 reading every answer.
 
 | | answerable, 81 | unanswerable, 19 | total |
@@ -70,10 +85,9 @@ reading every answer.
 | with reranker | 74 | 19 | **93 / 100** |
 | oracle context | 80 | not applicable | — |
 
-Which of the two runs the default is decided by the hardware: reranking is on where it is
-cheap and off where it is not, and `eval` prints which one produced a given table. The
-nineteen unanswerable questions are refused either way, with nothing invented in either
-run.
+The default run is the first row: reranking is off unless `--rerank` asks for it, and
+`eval` prints which one produced a given table. The nineteen unanswerable questions are
+refused either way, with nothing invented in either run.
 
 ### Where the failures come from
 
@@ -126,8 +140,10 @@ A cross-encoder pass over the fused candidates. It exists because fusion reads r
 discards scores, so a document one leg is certain about loses to one both legs merely
 like.
 
-On by default where a GPU is present and off where it is not, since that is the whole of
-the argument either way; `--rerank` and `--no-rerank` override.
+Off by default, on with `--rerank`. It was on-where-a-GPU-is-present for a while, and a
+default that changes with the machine makes two runs incomparable without reading the
+header that says which one happened, for a gain of three questions at n=100 that the
+interval does not resolve. `--no-rerank` still says off explicitly.
 
 | | success@1 | success@6 | nDCG@10 | seconds per query |
 |---|---|---|---|---|
@@ -170,8 +186,8 @@ outcome, reached without spending a token.
 #### Cost
 
 13.1 seconds a query on this CPU against 4.6 for generation, so on this machine reranking
-costs about three times what answering does, which is why the default follows the
-hardware. On a GPU the model should be a rounding error.
+costs about three times what answering does. On a GPU it should be a rounding error, which
+is the case worth turning it on for.
 
 Candidate pool size was tested and left at 20 per leg. Raising both to 50 gives exactly
 the same success@1 with success@6 1.2 points lower and twice the latency, which follows
@@ -196,6 +212,13 @@ move if the runs are regenerated. Both gates held across both runs.
 Of the 19 unanswerable questions, 9 were stopped by the cosine gate before any model call
 and 10 were refused by the model itself under the prompt's third rule, which is the split
 the two-gate design predicts.
+
+**These numbers are the CLI's behaviour.** `ask` and `answer-all` refuse below the gate,
+which is what was measured. `demo.py` defaults to answering those questions from general
+knowledge instead, so the "unanswerable questions answered anyway" row would not hold for
+it, and is not supposed to: the answer is marked as unsourced rather than served as the
+lab's documentation. Run `demo.py` with `LABGPT_ABSTAIN_MODE=refuse` to get the measured
+behaviour.
 
 ### Cost
 
@@ -237,8 +260,9 @@ correct and incomplete, which are human grades the files do not carry.
 - Python 3.10 or newer
 - Building the retrieval index runs on CPU and takes seconds on this corpus. The embedding
   model, `BAAI/bge-small-en-v1.5`, downloads once at about 130 MB and then works offline
-- Generation calls any OpenAI-compatible endpoint, so it needs no GPU. Reranking is the
-  only step that wants one, and it runs on CPU if there is none
+- Generation calls any OpenAI-compatible endpoint by default, so it needs no GPU.
+  Reranking wants one and runs on CPU if there is none. Only `demo.py` with
+  `LABGPT_BACKEND=local` requires a GPU, for the model it loads itself
 
 With [uv](https://docs.astral.sh/uv/):
 
@@ -252,8 +276,16 @@ Or with pip:
 python -m venv .venv && .venv/bin/pip install -e .
 ```
 
-There are no optional extras. Everything the retrieval and evaluation path needs is a
-hard dependency, and the scripts in `tools/` use the standard library.
+One optional extra, `search`, for `demo.py`'s web branch:
+
+```bash
+uv sync --extra search
+```
+
+Everything the retrieval, evaluation and answering path needs is a hard dependency, and
+the scripts in `tools/` use the standard library. The web branch is the exception because
+it pulls a browser driver, and it runs on the local backend only, so an endpoint-only
+deployment never needs it.
 
 ## Running it
 
@@ -264,12 +296,151 @@ writes `.index/`:
 uv run python -m labrag.cli index
 ```
 
-Then ask it something. This path needs an endpoint rather than a GPU:
+The corpus it reads is `LABGPT_DATA_DIR`, which defaults to the synthetic `data/sample`.
+There is no `--data-dir` flag, and `index` prints the corpus path it used on its first
+line: an index built from the wrong directory retrieves nothing and does not otherwise
+announce it.
+
+Then ask it something. This path needs an endpoint rather than a GPU, so check the
+endpoint first:
 
 ```bash
 uv run python -m labrag.cli selftest                     # one prompt, checks the endpoint
 uv run python -m labrag.cli ask "how do I thaw BJ cells"
 ```
+
+Or the chat loop, over the same index:
+
+```bash
+uv run python demo.py
+```
+
+It reads `.index/` and nothing else from disk, and prints what it resolved on startup:
+
+```
+index: 678 documents, 2745 chunks
+rerank: off
+model: AzureChatClient gpt-5-chat, 2500 tokens, reasoning_effort=low
+```
+
+`exit` or Ctrl-D leaves. Each answer is followed by the sources it cited, and by a count
+of factual sentences that carried no citation.
+
+Reranking is off here too. `LABGPT_RERANK=on` turns it on for a session, `auto` defers to
+the hardware, and either way the model loads at startup rather than inside the first
+question, so a hub that cannot be reached costs one warning and the session continues
+without it:
+
+```bash
+LABGPT_RERANK=on uv run python demo.py
+```
+
+## Where generation happens
+
+Retrieval is always local. Only the generation call changes, so every configuration below
+still embeds the query and scores documents on the machine, and sends at most the question
+and the retrieved chunks anywhere.
+
+`demo.py` picks between two backends with `LABGPT_BACKEND`:
+
+| `LABGPT_BACKEND` | What answers | Web leg |
+|---|---|---|
+| `api` (default) | A hosted OpenAI-compatible endpoint, Azure included | no |
+| `local` | `LABGPT_MODEL` loaded with transformers, needs a GPU | yes |
+
+The endpoint is the default and the local model is opt-in, named rather than sniffed from
+the environment: an unset variable should not quietly move generation from one to the
+other. With nothing configured, `demo.py` says what to set and stops rather than failing
+on the first question. The CLI has no local path at all; it always calls an endpoint.
+
+### Azure OpenAI, direct or behind an API Management gateway
+
+```bash
+export AZURE_OPENAI_GATEWAY=https://<gateway-host>/<product>   # host and product path
+export AZURE_OPENAI_TEAM_ID=<team-id>                          # appended to the gateway
+export AZURE_OPENAI_MODEL_ID=<deployment-name>                 # NOT the model family name
+export AZURE_OPENAI_API_VERSION=<api-version>
+export APIM_OPENAI_SUBSCRIPTION_KEY=<key>
+
+uv run python -m labrag.cli selftest
+```
+
+`selftest` prints the assembled URL before it sends anything, which is the fastest way to
+catch a misconfiguration:
+
+```
+{gateway}/{team-id}/openai/deployments/{deployment}/chat/completions?api-version={version}
+```
+
+Set `AZURE_OPENAI_ENDPOINT` to the whole base instead if you have it in one piece; the two
+forms are equivalent, and a value already carrying `/openai/deployments/...` or an
+`?api-version=` query is trimmed back rather than doubled. The key is sent as both
+`api-key` and `Ocp-Apim-Subscription-Key`, so one client reaches a direct Azure resource
+and a gatewayed one without being told which is in front of it.
+
+**A 401 here usually is not the key.** A gateway answers a path it cannot route with
+`"Access denied due to invalid subscription key or wrong API endpoint"`, so a deployment
+name that does not exist, or a base URL missing the team segment, produces an error that
+reads like bad credentials. Check the URL `selftest` prints before suspecting the key.
+
+Reasoning deployments (`gpt-5`, `o1`, `o3`, `o4`) reject `max_tokens` and any temperature
+but their default, which the client detects and corrects on the first call. They also
+spend reasoning tokens out of the answer budget and spend them first, so the budget is not
+an answer length. The 2500 default is measured rather than guessed: over 101 real
+questions with retrieved context, low effort spent a median of 192 reasoning tokens, 448
+at the 90th percentile and 704 at the worst successful call, while an earlier 800-token
+budget left seventeen questions with nothing written at all. An exhausted budget is raised
+as an error rather than recorded, because a batch of blank answers reads as the model
+declining to answer. `LABGPT_MAX_TOKENS` and `LABGPT_REASONING_EFFORT` override both the
+budget and the effort.
+
+### OpenAI, or any OpenAI-compatible endpoint
+
+```bash
+export LABGPT_LLM_BASE_URL=http://localhost:8000/v1    # vLLM, Ollama, a LiteLLM proxy
+export LABGPT_LLM_API_KEY=<key>
+export LABGPT_LLM_MODEL=<model>
+```
+
+When Azure variables are set too, Azure wins by default: on a machine configured for both,
+the approved endpoint should be the one that gets institutional text, and that should not
+depend on remembering a flag. `--provider openai` overrides it per run.
+
+### The local model
+
+```bash
+LABGPT_BACKEND=local LABGPT_MODEL=Qwen/Qwen3-8B uv run python demo.py
+```
+
+The only configuration in which no text leaves the machine, which is the reason it exists.
+It needs a GPU with room for the model, and `transformers` and `torch`; the api path needs
+neither, and imports neither.
+
+## When retrieval finds nothing
+
+Below the abstention threshold there are no sources to ground an answer in. The CLI
+refuses. `demo.py` defaults to putting the question to the model anyway with nothing
+attached, and labelling what comes back:
+
+- a different system prompt, not the sourced one with its sources removed. It opens by
+  saying the lab's documentation does not cover this, refuses to state lab specifics it
+  does not have (protocol parameters, catalog numbers, storage locations, who is
+  responsible for what), sends exposures and spills to the safety officer instead of
+  improvising a procedure, and emits no citations
+- a banner before and after the answer
+- no citation validation, because nothing was supplied to cite. A `[S#]` emitted anyway is
+  reported as invented
+- recorded as `answer:unsourced` in the metrics, so the two kinds of answer count apart
+
+This is the intended behaviour for the chat loop: someone at a prompt is better served by
+a general answer that says plainly it is general than by a refusal, as long as it cannot
+be mistaken for the lab's own documentation. `LABGPT_ABSTAIN_MODE=refuse` restores the
+gate-stops-here behaviour, which is what the [Results](#results) were measured with and
+what the CLI still does.
+
+The second gate is unaffected in both modes. An answer that *was* given sources and cited
+none of them is still withheld: that is a model ignoring its evidence rather than a gap in
+the corpus.
 
 ## Retrieval index
 
@@ -281,7 +452,7 @@ uv run python -m labrag.cli search "SMP-17104" --explain   # retrieve, no LLM
 uv run python -m labrag.cli ask "how do I thaw BJ cells" --dry-run  # gate + prompt
 uv run python -m labrag.cli eval --failures    # score retrieval against a question set
 uv run python -m labrag.cli sweep              # compare retrieval configurations
-uv run python -m labrag.cli eval --rerank      # with the cross-encoder pass
+uv run python -m labrag.cli eval --rerank      # with the cross-encoder pass, off by default
 uv run python -m labrag.cli answer-all --questions ... --out ...   # batch, to JSONL
 ```
 
@@ -292,7 +463,17 @@ committed.
 ## Measuring cost per query
 
 Every call records prompt tokens, generated tokens and wall time, and `answer-all` writes
-them per question into the output JSONL alongside the answer.
+them per question into the output JSONL alongside the answer. `demo.py` writes the same
+records to `LABGPT_METRICS` when it is set, tagged by stage, so a session breaks down into
+retrieval, the web classifier and the answer itself:
+
+```bash
+LABGPT_METRICS=metrics.jsonl uv run python demo.py    # ask some questions, then exit
+uv run python labgpt_metrics.py metrics.jsonl         # per-stage breakdown
+```
+
+On the local backend those counts come from the input and output tensors and are exact for
+the tokenizer in use. On the api path they are whatever the endpoint reports.
 
 Reasoning tokens are recorded separately from the answer. They are billed as completion
 tokens while forming no part of the reply, and conflating the two is what made an early
@@ -305,10 +486,42 @@ copy `.env.example` to `.env`:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `LABGPT_DATA_DIR` | `data/sample` | Corpus directory |
-| `LABGPT_LLM_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible endpoint |
-| `LABGPT_LLM_API_KEY` | unset | Key for that endpoint |
-| `LABGPT_LLM_MODEL` | unset | Default model for the cli |
+| `LABGPT_DATA_DIR` | `data/sample` | Corpus directory, read when building an index |
+| `LABGPT_EMBED_MODEL` | `BAAI/bge-small-en-v1.5` | Embedding model, or a directory holding it |
+| `LABGPT_RERANK` | `off` | `off`, `on`, `auto` (on where a GPU makes it cheap); `demo.py` only |
+| `LABGPT_RERANK_MODEL` | `BAAI/bge-reranker-base` | Cross-encoder, `demo.py` only |
+| `LABGPT_MAX_TOKENS` | `2500` | Answer budget, shared with reasoning tokens |
+| `LABGPT_REASONING_EFFORT` | `low` in `demo.py`, endpoint default in the CLI | `minimal`/`low`/`medium`/`high` |
+
+Endpoint selection, read wherever a model is called:
+
+| Variable | Purpose |
+|---|---|
+| `AZURE_OPENAI_ENDPOINT` | The whole base URL, used as given |
+| `AZURE_OPENAI_GATEWAY` | Gateway host and product path, with the team id appended |
+| `AZURE_OPENAI_TEAM_ID` | Team segment of a gateway route |
+| `AZURE_OPENAI_MODEL_ID` | Deployment name; it becomes a path segment, not a body field |
+| `AZURE_OPENAI_API_VERSION` | Required by Azure, no default |
+| `APIM_OPENAI_SUBSCRIPTION_KEY` | Sent as `api-key` and as `Ocp-Apim-Subscription-Key` |
+| `LABGPT_LLM_BASE_URL` | OpenAI-compatible base, e.g. a vLLM or LiteLLM proxy |
+| `LABGPT_LLM_API_KEY` | Key for that endpoint |
+| `LABGPT_LLM_MODEL` | Default model for the CLI |
+
+`demo.py` only:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LABGPT_BACKEND` | `api` | `api` or `local`; which model answers |
+| `LABGPT_ABSTAIN_MODE` | `answer` | `answer` (unsourced fallback) or `refuse` |
+| `LABGPT_INDEX_DIR` | `.index` | Where the chat loop looks for the index |
+| `LABGPT_MODEL` | `Qwen/Qwen3-32B` | Local model, `LABGPT_BACKEND=local` only |
+| `LABGPT_ASSISTANT_NAME` | `LabGPT` | Name shown in the chat prompt |
+| `LABGPT_METRICS` | unset | Path to write per-call metrics JSONL; off when unset |
+
+On a network that blocks huggingface.co, both models have to arrive by hand. Fetch them
+elsewhere, then point `LABGPT_EMBED_MODEL` at the directory. The reranker is off by
+default, so on such a network it costs nothing until it is asked for. A hub that cannot be reached is
+reported as such rather than as a missing package.
 
 ## Using a private corpus
 
@@ -335,8 +548,10 @@ it to a personal API key is a larger exposure than committing it would have been
   defeated by the same thing, so the next place to look is the embedding model rather than
   the ranking.
 - **Three questions is not a demonstrated improvement.** Reranking moves the end-to-end
-  score from 90 to 93 of 100 and the confidence intervals overlap. It is free on a GPU, so
-  it is on, but the size of the gain is not established at n=100.
+  score from 90 to 93 of 100 and the confidence intervals overlap. That is why it is
+  opt-in rather than on wherever it is cheap: the gain is not established at n=100, and a
+  default that varies by machine would put an unestablished difference into runs nobody
+  asked to differ.
 - **Fusion discards calibrated similarity.** Reciprocal rank fusion reads only ranks, so a
   chunk both legs place in their top handful beats a chunk one leg is certain about. On
   "what should I do if I stick myself with a needle" the correct entry has cosine 0.710
@@ -356,6 +571,20 @@ it to a personal API key is a larger exposure than committing it would have been
 - **Paper sections are not expanded to whole documents,** unlike protocols. Deliberate,
   and argued in `labrag/documents.py`, but it means a methods answer sees one chunk rather
   than the section.
+- **Generated answers are not reproducible on the api path.** A reasoning deployment
+  refuses any temperature but its default, and `seed` is documented as best effort, so
+  identical inputs can give different answers and any comparison between configurations
+  has to treat the generated half as noisy.
+- **The unsourced fallback is unmeasured.** Everything in [Results](#results) was run with
+  the gate refusing. What `demo.py` now returns below the threshold has not been graded,
+  and the labelling that keeps it honest is a prompt instruction rather than a checked
+  gate: the citation validator cannot help when there are no citations to validate.
+- **The two entry points do not abstain alike, on purpose.** `demo.py` answers below the
+  gate and the CLI refuses, so a question can be refused by `ask` and answered by the chat
+  loop. That split is intended rather than pending: a person at a prompt is better served
+  by a general answer that says it is general than by a refusal, while `answer-all` feeds
+  an evaluation whose numbers depend on the gate holding. It does mean the chat loop is
+  not the thing [Results](#results) measured.
 - **`tools/` builds corpora, and is not covered by anything.** The four scripts that
   produce an evaluation corpus have no tests and reference input files that are not in the
   repository, so a corpus rebuild is checked by reading its output.
@@ -380,12 +609,18 @@ evaluation set. What the measurements now point at:
 | `labrag/` | Retrieval and answering: chunking, ingest, embeddings, BM25, fusion, gates |
 | `labrag/cli.py` | `index`, `search`, `ask`, `eval`, `sweep`, `answer-all`, `selftest` |
 | `labrag/rerank.py` | Cross-encoder reranking over the fused candidates |
-| `labgpt_config.py` | Corpus paths |
+| `labrag/answerer.py` | Chat clients: OpenAI-shaped, Azure, local transformers; the two gates |
+| `demo.py` | Interactive chat loop over the index |
+| `labgpt_config.py` | Corpus paths, and the local model name |
+| `labgpt_metrics.py` | Per-call token and latency instrumentation |
+| `search/` | DuckDuckGo search and page fetching for `demo.py`'s web leg |
 | `eval/` | Labelled question sets |
 | `tools/` | Corpus construction: PMC fetch, clean, merge, and a dump of the lab's own SQLite |
 | `data/sample/` | Synthetic corpus |
 
-The prompt-stuffing assistant this grew out of, its per-domain demo scripts, its SQLite
-build and its web-search branch were removed in `a2bc0ee` once the retrieval path replaced
-them. `export_experiments_db.py` survives because the lab's database is still where the
-real protocol text comes from, but nothing here builds one any more.
+The prompt-stuffing assistant this grew out of was removed in `a2bc0ee` once the retrieval
+path replaced it, and most of it stayed removed: the per-domain scripts, the SQLite build,
+`prompt-engineering/`. `demo.py` came back on the retrieval path rather than the old one,
+and brought back only what it imports, which is why `search/` holds two modules rather than
+six. `tools/export_experiments_db.py` survives because the lab's database is still where the real
+protocol text comes from, but nothing here builds one any more.
