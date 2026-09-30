@@ -191,6 +191,24 @@ def cmd_ask(args) -> int:
     return 0
 
 
+# The same two variables demo.py reads, so a shell configured for one is configured for
+# both. A reasoning deployment spends its reasoning out of the answer budget and spends it
+# first, so 800 tokens, which is generous for a cited answer, can be consumed entirely
+# before a reply starts; the budget is a cap rather than a spend, so raising it costs
+# nothing on a model that does not need it.
+DEFAULT_MAX_TOKENS = int(os.environ.get("LABGPT_MAX_TOKENS") or 3000)
+REASONING_EFFORTS = ("minimal", "low", "medium", "high")
+
+
+def _default_effort():
+    """LABGPT_REASONING_EFFORT, rejected here rather than by the endpoint as a 400."""
+    effort = os.environ.get("LABGPT_REASONING_EFFORT") or None
+    if effort is not None and effort not in REASONING_EFFORTS:
+        raise SystemExit(f"LABGPT_REASONING_EFFORT must be one of "
+                         f"{', '.join(REASONING_EFFORTS)}, not {effort!r}")
+    return effort
+
+
 def _client(args):
     """The chat client these arguments ask for.
 
@@ -499,12 +517,12 @@ def main(argv=None) -> int:
     p_ask.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"),
                        help="auto prefers Azure when its variables are set")
     # Reasoning models spend this budget on thinking before writing anything, so it is
-    # not the answer length. 800 is comfortable for a cited answer at low effort and can
-    # be exhausted entirely by reasoning at high effort.
-    p_ask.add_argument("--max-tokens", type=int, default=800)
-    p_ask.add_argument("--reasoning-effort", default=None,
-                       choices=("minimal", "low", "medium", "high"),
-                       help="reasoning models only; omitted means the endpoint default")
+    # not the answer length: at the endpoint's own default effort a four-figure count can
+    # go on reasoning alone, leaving an empty answer. Also LABGPT_MAX_TOKENS.
+    p_ask.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    p_ask.add_argument("--reasoning-effort", default=_default_effort(),
+                       choices=REASONING_EFFORTS,
+                       help="reasoning models only; also LABGPT_REASONING_EFFORT")
     p_ask.set_defaults(func=cmd_ask)
 
     p_self = sub.add_parser("selftest", help="send one prompt, to check the endpoint")
@@ -513,9 +531,9 @@ def main(argv=None) -> int:
                              "or AZURE_OPENAI_MODEL_ID")
     p_self.add_argument("--base-url", default=None)
     p_self.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
-    p_self.add_argument("--max-tokens", type=int, default=512)
-    p_self.add_argument("--reasoning-effort", default=None,
-                        choices=("minimal", "low", "medium", "high"))
+    p_self.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    p_self.add_argument("--reasoning-effort", default=_default_effort(),
+                        choices=REASONING_EFFORTS)
     p_self.set_defaults(func=cmd_selftest)
 
     p_all = sub.add_parser("answer-all", help="answer a whole question set, to JSONL")
@@ -532,9 +550,9 @@ def main(argv=None) -> int:
                              "or AZURE_OPENAI_MODEL_ID")
     p_all.add_argument("--base-url", default=None)
     p_all.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
-    p_all.add_argument("--max-tokens", type=int, default=800)
-    p_all.add_argument("--reasoning-effort", default=None,
-                       choices=("minimal", "low", "medium", "high"))
+    p_all.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    p_all.add_argument("--reasoning-effort", default=_default_effort(),
+                       choices=REASONING_EFFORTS)
     p_all.set_defaults(func=cmd_answer_all)
 
     args = parser.parse_args(argv)

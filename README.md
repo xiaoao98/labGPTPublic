@@ -22,13 +22,18 @@ query
   |     fused with reciprocal rank fusion   -> top k documents
   |
   +-- abstention gate on the retrieval cosine, before a token is spent
-  +-- the directory, retrieved separately, appended only above a relevance floor
+  |     below it, refuse here; the model is never called
   |
   +-- local backend only:
   |     classify: does this need web search?   (1 LLM call, gates a real external call)
   |     if yes -> DuckDuckGo search, fetch and summarize pages
   |
+  +-- the directory, retrieved separately (k=2, members only), appended above a
+  |     relevance floor, so it cannot crowd out the k=6 main slots
+  |
   +-- generate with numbered sources and required citations
+  |     a web summary rides along as context that must not be cited
+  |
   +-- validate citations; withhold the answer if none resolve to a real source
 ```
 
@@ -160,12 +165,23 @@ route with `"Access denied due to invalid subscription key or wrong API endpoint
 deployment name that does not exist, or a base URL missing the team segment, produces an
 error that reads like bad credentials. Check the URL `selftest` prints first.
 
-Two more things worth knowing about the reasoning deployments (`gpt-5`, `o1`, `o3`, `o4`):
-they reject `max_tokens` and any temperature but their default, which the client detects
-and corrects on the first call; and they spend their reasoning tokens out of the same
-budget as the answer, so too small a budget returns an empty answer rather than an error.
-`LABGPT_REASONING_EFFORT` controls the spend, and on this workload answers are quoted from
-supplied sources rather than derived, so `low` is usually enough.
+Two more things worth knowing about the reasoning deployments (`gpt-5`, `o1`, `o3`, `o4`).
+They reject `max_tokens` and any temperature but their default, which the client detects
+and corrects on the first call. And they spend their reasoning tokens out of the same
+budget as the answer, and spend them first, so the budget is not an answer length: at the
+endpoint's own default effort, a 1024-token budget went entirely on reasoning and returned
+an empty answer. On the api path `demo.py` therefore asks for 3000 tokens and
+`reasoning_effort=low`, since answers here are quoted from the supplied sources rather than
+derived. Override with `LABGPT_MAX_TOKENS` and `LABGPT_REASONING_EFFORT`:
+
+```bash
+export LABGPT_MAX_TOKENS=6000
+export LABGPT_REASONING_EFFORT=minimal    # minimal | low | medium | high
+```
+
+An empty answer is raised as an error rather than recorded, which matters for
+`answer-all`: a batch that stored a hundred blank answers would read as the model
+declining to answer.
 
 ### OpenAI, or any OpenAI-compatible endpoint
 
@@ -216,8 +232,11 @@ uv run python -m labrag.cli answer-all --questions eval/questions.yaml --out ans
 `chunks` is there so chunk boundaries can be iterated on without paying for embedding,
 which is the slow part. The index is generated, never committed.
 
-`ask`, `selftest` and `answer-all` are the commands that call a model, and they read the
-same environment as `demo.py`, with `--provider` and `--model` to override it per run.
+`ask`, `selftest` and `answer-all` are the commands that call a model. They read the same
+endpoint variables as `demo.py`, plus `LABGPT_MAX_TOKENS` and `LABGPT_REASONING_EFFORT`,
+with `--provider`, `--model`, `--max-tokens` and `--reasoning-effort` to override per run.
+`LABGPT_BACKEND` is not among them: these commands always call an endpoint, and there is
+no local-model path through the CLI.
 `answer-all` writes one JSONL record per question, flushed as it goes, and `--resume`
 skips ids already in the output file, so an interrupted batch is cheap to restart.
 
@@ -251,7 +270,8 @@ copy `.env.example` to `.env`:
 | `LABGPT_BACKEND` | `api` | `api` or `local`; which model answers |
 | `LABGPT_INDEX_DIR` | `.index` | Where `demo.py` looks for the index |
 | `LABGPT_EMBED_MODEL` | `BAAI/bge-small-en-v1.5` | Embedding model, or a local directory holding it |
-| `LABGPT_REASONING_EFFORT` | unset | `minimal`/`low`/`medium`/`high`; reasoning deployments only |
+| `LABGPT_REASONING_EFFORT` | `low` in `demo.py`, endpoint default in the CLI | `minimal`/`low`/`medium`/`high`; reasoning deployments only |
+| `LABGPT_MAX_TOKENS` | `3000` | Answer budget, shared with reasoning tokens |
 | `GOOGLE_API_KEY` | unset | Optional, for `search/callGoogleAPI.py` |
 | `GOOGLE_SEARCH_ENGINE_ID` | unset | Optional, for `search/callGoogleAPI.py` |
 
