@@ -52,6 +52,7 @@ from labrag.answerer import (
     should_abstain, validate_citations, count_uncited_sentences,
 )
 from labrag.embeddings import Embedder, resolve_model
+from labrag.rerank import DEFAULT_RERANK_MODEL, Reranker, rerank_is_cheap
 from labrag.prompts import (
     ABSTENTION_TEMPLATE, build_messages, build_messages_without_sources,
 )
@@ -128,6 +129,39 @@ BACKEND = os.environ.get("LABGPT_BACKEND", "api")
 # The second gate is untouched. An answer that was given sources and cited none of them is
 # still withheld: that is a model ignoring its evidence, not a gap in the corpus.
 ABSTAIN_MODE = os.environ.get("LABGPT_ABSTAIN_MODE", "answer")
+
+# Whether a cross-encoder re-sorts the fused shortlist before the top k is taken. "auto"
+# defers to the hardware, which is what the CLI does and for the same measured reason: the
+# pass buys roughly three end-to-end questions in a hundred, and costs 13.1 seconds a query
+# on a CPU against 6.2 for generation. Free on a GPU, and the dominant cost of a question
+# without one.
+#
+# demo.py ran without a reranker at all while the CLI reranked by default, so the same
+# question could be answered from a differently ordered shortlist depending on which one
+# asked it. That was an oversight, not a decision.
+#
+# It loads a second model, BAAI/bge-reranker-base, on first use. On a network that blocks
+# huggingface.co that download fails the way the embedding model does, so "off" is the
+# escape hatch and says so when it fires.
+RERANK_MODE = os.environ.get("LABGPT_RERANK", "auto")
+if RERANK_MODE not in ("auto", "on", "off"):
+    raise SystemExit(f"LABGPT_RERANK must be auto, on or off, not {RERANK_MODE!r}")
+
+# How many fused candidates the reranker scores. The CLI's default, kept in step.
+RERANK_CANDIDATES = 40
+
+
+def build_reranker():
+    """The reranker RERANK_MODE asks for, or none."""
+    wanted = RERANK_MODE == "on" or (RERANK_MODE == "auto" and rerank_is_cheap())
+    if not wanted:
+        return None
+    reranker = Reranker(os.environ.get("LABGPT_RERANK_MODEL") or DEFAULT_RERANK_MODEL)
+    # Scored once here to force the load. The Reranker loads on first use, which would
+    # otherwise be inside the first question, where a hub that cannot be reached takes the
+    # chat loop down with it instead of costing one degraded startup.
+    reranker.score("warm up", ["warm up"])
+    return reranker
 if ABSTAIN_MODE not in ("answer", "refuse"):
     raise SystemExit(f"LABGPT_ABSTAIN_MODE must be answer or refuse, not {ABSTAIN_MODE!r}")
 
@@ -280,7 +314,15 @@ def run_chat() -> None:
 
     rprint(f"[dim]index: {len(store.documents)} documents, {len(store.chunks)} chunks[/dim]")
     embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
-    retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=TOP_K)
+    try:
+        reranker = build_reranker()
+    except Exception as exc:
+        rprint(f"[yellow]reranker unavailable ({exc}); continuing without it. "
+               f"Set LABGPT_RERANK=off to stop trying.[/yellow]")
+        reranker = None
+    retriever = Retriever(store, embedder=embedder, mode="hybrid", final_k=TOP_K,
+                          reranker=reranker, rerank_candidates=RERANK_CANDIDATES)
+    rprint(f"[dim]rerank: {reranker.model_name if reranker else 'off'}[/dim]")
 
     try:
         backend = build_backend()
@@ -326,6 +368,8 @@ def answer_query(query, retriever, backend) -> None:
     # and the model, told to name who can help, will name them. Hence the floor below.
     members = retriever.retrieve(query, k=TOP_K_MEMBERS, doc_types=["member"],
                                  include_linked=False)
+    # The member floor below reads hit.confidence, which is a cosine and is left untouched
+    # by reranking; the reranker's logit is not on that scale and is not a substitute.
 
     abstain, reason = should_abstain(result, DEFAULT_ABSTAIN_COSINE)
     rprint(f"[dim]best match {result.best_cosine:.3f}, "
