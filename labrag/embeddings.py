@@ -22,7 +22,15 @@ Two details that are easy to get wrong and expensive to debug:
 
 from __future__ import annotations
 
-DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
+import os
+
+# The name is resolved through the environment so the model can be loaded from a directory
+# on disk instead of by hub id. Some institutional networks block huggingface.co outright
+# (the TLS handshake is reset, which surfaces as a connection error rather than as a
+# refusal), and on those machines the only way in is to fetch the model elsewhere and
+# point at the copy. Keep it the same model: the index records which one built it, and
+# retrieval scores, including the abstention threshold, are not comparable across models.
+DEFAULT_MODEL = os.environ.get("LABGPT_EMBED_MODEL") or "BAAI/bge-small-en-v1.5"
 BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
 
@@ -37,6 +45,22 @@ def normalize(matrix):
     # A zero vector would produce NaN and poison every later comparison.
     norms[norms == 0.0] = 1.0
     return (matrix / norms).astype("float32")
+
+
+def _looks_like_unreachable_hub(exc: Exception) -> bool:
+    """Whether a load failure was the network rather than the model.
+
+    A blocked hub arrives as OSError from transformers, LocalEntryNotFoundError from
+    huggingface_hub, or a requests ConnectionError, depending on how far the download got
+    before the reset. Matching on the message is unlovely but it is the one thing all
+    three share, and the cost of a false positive is a slightly wrong hint on an error
+    that was going to be raised anyway.
+    """
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in (
+        "couldn't connect", "could not connect", "connection", "offline",
+        "localentrynotfound", "max retries", "name resolution", "timed out",
+    ))
 
 
 class Embedder:
@@ -58,7 +82,33 @@ class Embedder:
                     "  pip install sentence-transformers"
                 ) from exc
             print(f"loading embedding model {self.model_name} ...")
-            self._model = SentenceTransformer(self.model_name)
+            try:
+                self._model = SentenceTransformer(self.model_name)
+            except Exception as exc:
+                if not _looks_like_unreachable_hub(exc):
+                    raise
+                raise RuntimeError(
+                    f"could not load {self.model_name}: it is not in the local cache and "
+                    f"huggingface.co could not be reached.\n"
+                    f"  {type(exc).__name__}: {str(exc).splitlines()[0][:160]}\n"
+                    f"\n"
+                    f"  On a network that blocks the hub, fetch the model once from one "
+                    f"that does not\n"
+                    f"  and it stays cached in ~/.cache/huggingface:\n"
+                    f"\n"
+                    f"      python -c \"from sentence_transformers import "
+                    f"SentenceTransformer as S; S('{self.model_name}')\"\n"
+                    f"\n"
+                    f"  Or copy the model directory over from another machine and point "
+                    f"at it:\n"
+                    f"\n"
+                    f"      export LABGPT_EMBED_MODEL=/path/to/bge-small-en-v1.5\n"
+                    f"\n"
+                    f"  Use the same model that built the index; scores from different "
+                    f"embedding\n"
+                    f"  models are not comparable, and the abstention threshold is "
+                    f"calibrated to this one."
+                ) from exc
         return self._model
 
     @property
