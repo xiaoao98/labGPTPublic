@@ -344,6 +344,196 @@ class ChatClient:
         return content, body.get("usage", {})
 
 
+class AzureChatClient(ChatClient):
+    """Azure OpenAI, including behind an API Management gateway.
+
+    Three differences from the OpenAI API, each fatal rather than degraded, which is why
+    the parent class could never have reached one of these endpoints:
+
+      the deployment name lives in the URL path, not in the body's "model" field
+      api-version is a required query parameter with no default
+      the key goes in an `api-key` header, not an Authorization bearer token
+
+    The URL is assembled as
+
+        {endpoint}/openai/deployments/{deployment}/chat/completions?api-version={version}
+
+    which is what the openai SDK's AzureOpenAI client builds internally, so an endpoint
+    that works with that client works here.
+
+    WHERE THE BASE URL COMES FROM.
+
+    Two ways to supply it, because the working Azure snippet people are handed at this
+    institution assembles it from a team id rather than naming a base URL:
+
+        AZURE_OPENAI_ENDPOINT                       the whole base, used as given
+        AZURE_OPENAI_GATEWAY + AZURE_OPENAI_TEAM_ID joined as {gateway}/{team_id}
+
+    That second form is the one the autogen/openai-SDK snippet builds
+    (azure_endpoint=f"https://<gateway-host>/<product>/{team_id}"), so putting the host
+    and product segment in AZURE_OPENAI_GATEWAY and leaving the team id where it already
+    is reproduces it exactly. No host is defaulted in code: an institutional gateway
+    address is that institution's to publish, and this repository is public.
+
+    Whichever form is used, the base is normalised before the path is appended. A 401
+    from an API Management gateway reads "invalid subscription key or wrong API endpoint",
+    and the wrong-endpoint half of that is by far the more common cause: a base that stops
+    at the gateway host and omits the team segment is routed to no product at all and is
+    rejected as unsubscribed, which looks exactly like a bad key. So when a team id is set
+    and is not already somewhere in the base path, it is appended, and a base that was
+    pasted in whole (ending in /openai, /openai/deployments/<name>, a /chat/completions,
+    or carrying an ?api-version query) is trimmed back to its base before the client
+    rebuilds those parts itself.
+
+    NOT VERIFIED AGAINST A LIVE GATEWAY. Written from the request shape, with no access to
+    that network. Run `labrag.cli selftest` on the institutional machine before committing
+    a batch to it; that sends one trivial prompt and prints exactly which part failed.
+
+    The reasoning-model handling is inherited and matters here too: a gpt-5 deployment
+    rejects max_tokens and any temperature other than 1 whichever endpoint fronts it.
+    """
+
+    def __init__(self, deployment: str | None = None, endpoint: str | None = None,
+                 api_version: str | None = None, api_key: str | None = None,
+                 model: str | None = None, **kwargs):
+        # model is accepted so callers can stay uniform; the deployment is what routes.
+        deployment = (deployment or model
+                      or os.environ.get("AZURE_OPENAI_MODEL_ID")
+                      or os.environ.get("AZURE_OPENAI_DEPLOYMENT"))
+        team_id = os.environ.get("AZURE_OPENAI_TEAM_ID")
+        endpoint = endpoint or os.environ.get("AZURE_OPENAI_ENDPOINT")
+        if not endpoint and team_id and os.environ.get("AZURE_OPENAI_GATEWAY"):
+            endpoint = f"{os.environ['AZURE_OPENAI_GATEWAY'].rstrip('/')}/{team_id}"
+        api_version = api_version or os.environ.get("AZURE_OPENAI_API_VERSION")
+        api_key = (api_key
+                   or os.environ.get("APIM_OPENAI_SUBSCRIPTION_KEY")
+                   or os.environ.get("AZURE_OPENAI_API_KEY"))
+
+        missing = [name for name, value in (
+            ("AZURE_OPENAI_MODEL_ID", deployment),
+            ("AZURE_OPENAI_ENDPOINT", endpoint),
+            ("AZURE_OPENAI_API_VERSION", api_version),
+            ("APIM_OPENAI_SUBSCRIPTION_KEY", api_key),
+        ) if not value]
+        if missing:
+            hint = ""
+            if not endpoint and team_id:
+                hint = ("; AZURE_OPENAI_TEAM_ID is set, so either put the full base URL "
+                        "in AZURE_OPENAI_ENDPOINT, or set AZURE_OPENAI_GATEWAY to the "
+                        "gateway host and product path and the team id will be appended "
+                        "to it")
+            raise LLMError("Azure OpenAI is not fully configured; missing "
+                           + ", ".join(missing) + hint)
+
+        # The parent sets up shape detection from the model name, which for Azure is the
+        # deployment name. A deployment is often named after its model, so the guess
+        # usually lands; when it does not, the 400 corrects it on the first call.
+        super().__init__(model=deployment, **kwargs)
+        self.deployment = deployment
+        self.endpoint = self._normalise_endpoint(endpoint, team_id)
+        self.api_version = api_version
+        self._key = api_key
+        self.url = (f"{self.endpoint}/openai/deployments/{self.deployment}"
+                    f"/chat/completions?api-version={self.api_version}")
+
+    @staticmethod
+    def _normalise_endpoint(endpoint: str, team_id: str | None = None) -> str:
+        """The base URL the deployment path gets appended to.
+
+        Strips anything the client is about to add back, so a value copied out of a
+        browser or another client still works, and appends the team segment when the base
+        is missing it, which is the configuration mistake that produces a 401 reading as
+        a bad key.
+        """
+        base = endpoint.split("?", 1)[0].rstrip("/")
+        for suffix in ("/chat/completions", "/completions", "/embeddings"):
+            if base.endswith(suffix):
+                base = base[: -len(suffix)]
+        # /openai/deployments/<name> and a bare /openai are both rebuilt below.
+        base = re.sub(r"/openai/deployments/[^/]+$", "", base)
+        base = re.sub(r"/openai$", "", base).rstrip("/")
+        if team_id and team_id not in base.split("/"):
+            base = f"{base}/{team_id}"
+        return base
+
+    def _headers(self) -> dict:
+        # api-key is what Azure OpenAI itself reads and what the openai SDK sends.
+        # Ocp-Apim-Subscription-Key is what an API Management gateway in front of it
+        # reads. They carry the same secret here, and a gateway that only understands
+        # one ignores the other, so sending both means one client covers a direct Azure
+        # resource and a gatewayed one without being told which it is talking to.
+        return {"Content-Type": "application/json",
+                "api-key": self._key,
+                "Ocp-Apim-Subscription-Key": self._key}
+
+
+def chat_client_from_env(model: str | None = None, provider: str = "auto", **kwargs):
+    """The client the environment is configured for.
+
+    "auto" prefers Azure when its variables are present, because on an institutional
+    machine both may be set and the approved endpoint is the one that should win. Data
+    reaching a personal API key by default is exactly the accident worth designing out.
+    """
+    azure_configured = bool(
+        os.environ.get("AZURE_OPENAI_ENDPOINT")
+        or (os.environ.get("AZURE_OPENAI_GATEWAY")
+            and os.environ.get("AZURE_OPENAI_TEAM_ID")))
+    if provider == "azure" or (provider == "auto" and azure_configured):
+        return AzureChatClient(model=model, **kwargs)
+    if provider not in ("auto", "openai"):
+        raise LLMError(f"unknown provider {provider!r}; use auto, openai or azure")
+    return ChatClient(model=model or os.environ.get("LABGPT_LLM_MODEL")
+                      or "gpt-4o-mini", **kwargs)
+
+
+class TransformersChatClient:
+    """A locally loaded transformers model, behind the same interface as ChatClient.
+
+    demo.py runs an open-weights model on the machine itself, which is the whole reason
+    the corpus can stay institutional. Answerer only needs `.complete(messages)`, so the
+    local and hosted paths are interchangeable and nothing downstream knows which is in
+    use.
+
+    The tokenizer and model are passed in rather than loaded here, because loading a 32B
+    model takes minutes and demo.py already holds one for the classifier call.
+    """
+
+    def __init__(self, tokenizer, model, max_new_tokens: int = 1024,
+                 thinking: bool = True, streamer=None):
+        self.tokenizer = tokenizer
+        self.model = model
+        self.max_new_tokens = max_new_tokens
+        self.thinking = thinking
+        self.streamer = streamer
+
+    def complete(self, messages) -> tuple[str, dict]:
+        text = self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True,
+            enable_thinking=self.thinking,
+        )
+        inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+        generated = self.model.generate(
+            **inputs, max_new_tokens=self.max_new_tokens,
+            do_sample=False, streamer=self.streamer,
+        )
+        new_tokens = generated[0][len(inputs.input_ids[0]):]
+        answer = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+
+        # A thinking model emits its reasoning before </think>; only what follows is the
+        # answer, and citation validation must not see the reasoning.
+        if "</think>" in answer:
+            answer = answer.split("</think>")[-1]
+
+        usage = {
+            "prompt_tokens": int(inputs.input_ids.shape[1]),
+            "completion_tokens": int(len(new_tokens)),
+        }
+        return answer.strip(), usage
+
+
+# --- answering ----------------------------------------------------------------
+
+
 class Answerer:
     def __init__(self, retriever, client=None, k: int = 6,
                  abstain_cosine: float = DEFAULT_ABSTAIN_COSINE):

@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import labgpt_config as cfg  # noqa: E402
 
 from .answerer import (  # noqa: E402
-    Answerer, ChatClient, DEFAULT_ABSTAIN_COSINE, LLMError, should_abstain,
+    Answerer, DEFAULT_ABSTAIN_COSINE, LLMError, chat_client_from_env, should_abstain,
 )
 from .chunker import write_chunks  # noqa: E402
 from .documents import write_documents  # noqa: E402
@@ -197,10 +197,22 @@ def cmd_ask(args) -> int:
 
 
 def _client(args):
-    """The chat client these arguments ask for."""
-    return ChatClient(model=args.model, base_url=getattr(args, "base_url", None),
-                      max_tokens=args.max_tokens,
-                      reasoning_effort=args.reasoning_effort)
+    """The chat client these arguments ask for.
+
+    Through chat_client_from_env rather than ChatClient directly, so that restoring the
+    Azure client to answerer.py actually puts it on the path: the endpoint is chosen by
+    which variables are set, and Azure wins when its are, so institutional text does not
+    reach a personal key because a flag was forgotten.
+
+    base_url is only meaningful for the OpenAI-shaped client; an Azure endpoint is
+    assembled from the deployment and api-version instead, so it is passed only when it
+    would be used.
+    """
+    kwargs = {"max_tokens": args.max_tokens, "reasoning_effort": args.reasoning_effort}
+    if getattr(args, "base_url", None):
+        kwargs["base_url"] = args.base_url
+    return chat_client_from_env(model=getattr(args, "model", None),
+                                provider=getattr(args, "provider", "auto"), **kwargs)
 
 
 def _oracle_documents(retriever, store, question, k):
@@ -609,10 +621,20 @@ def main(argv=None) -> int:
     p_ask.add_argument("--dry-run", action="store_true",
                        help="show the assembled prompt instead of calling a model")
     p_ask.add_argument("--show", type=int, default=2500, help="dry-run print limit")
-    p_ask.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini",
-                       help="chat model; also LABGPT_LLM_MODEL")
+    # Defaults to None rather than to a model name, and this is not cosmetic. The name
+    # given here is passed on as the *deployment* when the provider resolves to Azure,
+    # where it becomes a path segment. A default of "gpt-4o-mini" therefore silently
+    # overrode AZURE_OPENAI_MODEL_ID and requested a deployment that does not exist; an
+    # API Management gateway answers an unroutable path with a 401 about the subscription
+    # key, so the symptom pointed at the key rather than at the model name. Leaving it
+    # None lets chat_client_from_env pick the right per-provider source.
+    p_ask.add_argument("--model", default=None,
+                       help="chat model, or Azure deployment; also LABGPT_LLM_MODEL "
+                            "or AZURE_OPENAI_MODEL_ID")
     p_ask.add_argument("--base-url", default=None,
                        help="OpenAI-compatible endpoint; also LABGPT_LLM_BASE_URL")
+    p_ask.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"),
+                       help="auto prefers Azure when its variables are set")
     # Reasoning models spend this budget on thinking before writing anything, so it is a
     # ceiling on reasoning plus answer, not on answer length.
     #
@@ -636,8 +658,11 @@ def main(argv=None) -> int:
     p_ask.set_defaults(func=cmd_ask)
 
     p_self = sub.add_parser("selftest", help="send one prompt, to check the endpoint")
-    p_self.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
+    p_self.add_argument("--model", default=None,
+                        help="chat model, or Azure deployment; also LABGPT_LLM_MODEL "
+                             "or AZURE_OPENAI_MODEL_ID")
     p_self.add_argument("--base-url", default=None)
+    p_self.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
     p_self.add_argument("--max-tokens", type=int, default=512)
     p_self.add_argument("--reasoning-effort", default=None,
                         choices=("minimal", "low", "medium", "high"))
@@ -656,8 +681,11 @@ def main(argv=None) -> int:
                        help="fill the k slots with the labelled documents, bypassing the "
                             "confidence gate, to measure the generator with retrieval held "
                             "perfect")
-    p_all.add_argument("--model", default=os.environ.get("LABGPT_LLM_MODEL") or "gpt-4o-mini")
+    p_all.add_argument("--model", default=None,
+                       help="chat model, or Azure deployment; also LABGPT_LLM_MODEL "
+                            "or AZURE_OPENAI_MODEL_ID")
     p_all.add_argument("--base-url", default=None)
+    p_all.add_argument("--provider", default="auto", choices=("auto", "openai", "azure"))
     p_all.add_argument("--max-tokens", type=int, default=2500)
     p_all.add_argument("--reasoning-effort", default=None,
                        choices=("minimal", "low", "medium", "high"))
