@@ -420,9 +420,11 @@ attached, and labelling what comes back:
   reported as invented
 - recorded as `answer:unsourced` in the metrics, so the two kinds of answer count apart
 
-`LABGPT_ABSTAIN_MODE=refuse` restores the gate-stops-here behaviour, which is what the
-[Results](#results) were measured with. Which is right depends on the corpus: refusing is
-safer for a question about a spill, and useless for a question the lab never wrote down.
+This is the intended behaviour for the chat loop: someone at a prompt is better served by
+a general answer that says plainly it is general than by a refusal, as long as it cannot
+be mistaken for the lab's own documentation. `LABGPT_ABSTAIN_MODE=refuse` restores the
+gate-stops-here behaviour, which is what the [Results](#results) were measured with and
+what the CLI still does.
 
 The second gate is unaffected in both modes. An answer that *was* given sources and cited
 none of them is still withheld: that is a model ignoring its evidence rather than a gap in
@@ -563,10 +565,12 @@ it to a personal API key is a larger exposure than committing it would have been
   the gate refusing. What `demo.py` now returns below the threshold has not been graded,
   and the labelling that keeps it honest is a prompt instruction rather than a checked
   gate: the citation validator cannot help when there are no citations to validate.
-- **The two entry points do not abstain alike.** `demo.py` answers below the gate and the
-  CLI refuses, so a question can be refused by `ask` and answered by the chat loop. The
-  flag exists on `demo.py` only, and unifying them is a decision about the product rather
-  than a cleanup.
+- **The two entry points do not abstain alike, on purpose.** `demo.py` answers below the
+  gate and the CLI refuses, so a question can be refused by `ask` and answered by the chat
+  loop. That split is intended rather than pending: a person at a prompt is better served
+  by a general answer that says it is general than by a refusal, while `answer-all` feeds
+  an evaluation whose numbers depend on the gate holding. It does mean the chat loop is
+  not the thing [Results](#results) measured.
 - **`tools/` builds corpora, and is not covered by anything.** The four scripts that
   produce an evaluation corpus have no tests and reference input files that are not in the
   repository, so a corpus rebuild is checked by reading its output.
