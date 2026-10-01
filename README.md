@@ -338,13 +338,17 @@ LABGPT_RERANK=on uv run python demo.py
 ## Serving it to other people
 
 `serve.py` puts the same pipeline behind one endpoint and one page, for a lab that wants
-to ask questions without a terminal:
+to ask questions without a terminal. On a machine that has the repository:
 
 ```bash
 export LABGPT_API_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(24))")
-export LABGPT_LOG_PATH=/srv/labgpt/qa.jsonl
-uv run --extra serve uvicorn serve:app --host 0.0.0.0 --port 8080
+export LABGPT_LOG_PATH=./runs/qa.jsonl
+uv run --extra serve uvicorn serve:app --host 127.0.0.1 --port 8080
 ```
+
+Then open `http://127.0.0.1:8080`, paste the token once, and ask. `--host 0.0.0.0` serves
+the network instead of this machine, which is a decision rather than a default: see
+[Deploying it](#deploying-it) for the shape that belongs on a shared host.
 
 - `GET /` the page, `POST /ask` the endpoint, `GET /health` what the process loaded
 - every request carries `X-LabGPT-Token`, checked in constant time. The service refuses to
@@ -376,6 +380,48 @@ possible to see what people actually ask and which questions get refused, and it
 means the file quotes the corpus back verbatim and records who wanted to know what. Keep
 it on the server, readable by the account that runs the service, and out of any backup
 that leaves the building.
+
+## Deploying it
+
+The lab server this runs on has no internet access, no GPU, a Python too old to use, and
+no root for the account that runs the service. Containers would solve the first three and
+need the fourth, so the deployment is a bundle instead: one tarball holding an
+interpreter, every wheel, the application, the embedding model and an index. Nothing is
+downloaded on the far side, and nothing is installed system-wide.
+
+Build it on a machine with internet, from the repository:
+
+```bash
+./deploy/build-bundle.sh ~/Desktop/labgpt-bundle.tar.gz
+```
+
+About 400 MB and under a minute. It takes the embedding model from `LABGPT_EMBED_MODEL`
+and the index from `LABGPT_INDEX_DIR`, defaulting to `./bge-small-en-v1.5` and `./.index`,
+so the bundle carries whichever corpus the index was built from. Then copy it over, and on
+the server:
+
+```bash
+tar xzf labgpt-bundle.tar.gz && cd labgpt-bundle && ./install.sh
+```
+
+`install.sh` unpacks the interpreter, builds a virtual environment and installs the wheels
+with `--no-index`, so a missing wheel fails there rather than hanging against an
+unreachable pypi. It writes `labgpt.env` for the token and the Azure settings, with 600
+permissions. `./run.sh` starts the service on port 8090.
+
+Three things in `deploy/build-bundle.sh` are there because each was a failure first, and
+the comments say so: the interpreter is bundled because RHEL 9 ships Python 3.9; torch
+comes from the CPU index, because the default wheels carry CUDA for a GPU the server does
+not have and turn 285 MB into over 2 GB; and the wheels are requested for manylinux
+x86_64, because built on a laptop they are otherwise the wrong architecture and only say
+so on the server.
+
+`deploy/DEPLOY.md` travels inside the bundle and covers the rest: keeping it running past
+a logout, the `@reboot` entry, and what the index and the question log contain.
+
+Updating a deployment is the same path again: rebuild the index, rebuild the bundle, copy,
+install into a new directory, and switch over. There is no in-place update, which for a
+service this size is a feature rather than a gap.
 
 ## Where generation happens
 
@@ -651,6 +697,8 @@ evaluation set. What the measurements now point at:
 | `labrag/` | Retrieval and answering: chunking, ingest, embeddings, BM25, fusion, gates |
 | `labrag/cli.py` | `index`, `search`, `ask`, `eval`, `sweep`, `answer-all`, `selftest` |
 | `labrag/rerank.py` | Cross-encoder reranking over the fused candidates |
+| `serve.py`, `web/` | The HTTP service and its page |
+| `deploy/` | Offline bundle: build it here, install it there |
 | `labrag/answerer.py` | Chat clients: OpenAI-shaped, Azure, local transformers; the two gates |
 | `demo.py` | Interactive chat loop over the index |
 | `labgpt_config.py` | Corpus paths, and the local model name |
