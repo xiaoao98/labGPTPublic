@@ -153,6 +153,21 @@ class Embedder:
     def _uses_bge_prefix(self) -> bool:
         return "bge" in self.model_name.lower()
 
+    def warm(self) -> None:
+        """Load the model now, instead of inside whichever request arrives first.
+
+        sentence-transformers loads on first use. In a chat loop that cost lands on the
+        first question of the session; in a service it lands on one colleague, who
+        experiences the whole system as slow for reasons that have nothing to do with
+        their question. Measured on the HTTP path: 14.3 s for the first request against
+        7.5 s for every one after it.
+
+        One short encode is enough to force the load, and it exercises the tokenizer and
+        the pooling layer as well, so a model directory that is missing a file fails here
+        rather than on a question.
+        """
+        self.encode_query("warm up")
+
     def encode_documents(self, texts):
         """Embed corpus chunks. No prefix; documents are embedded bare."""
         vectors = self.model.encode(

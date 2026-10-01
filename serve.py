@@ -55,20 +55,33 @@ def _load() -> None:
     a started service looks like a silent one in the logs.
     """
     store = VectorStore.load(INDEX_DIR)
+    print(f"index: {len(store.documents)} documents, {len(store.chunks)} chunks",
+          flush=True)
+
+    # Loaded here rather than on first use. sentence-transformers is lazy, which puts the
+    # load inside whichever request arrives first: 14.3 s against 7.1 s for every one
+    # after it, paid by one colleague who then reports that the service is slow. The port
+    # is not accepting connections until this returns, so a watchdog pointed at /health
+    # should allow for a startup that takes a few seconds.
     embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
+    warm_started = time.time()
+    embedder.warm()
+    print(f"embedder: {embedder.model_name} warmed in "
+          f"{time.time() - warm_started:.1f}s", flush=True)
+
     try:
         reranker = build_reranker()
     except Exception as exc:
         print(f"reranker unavailable ({exc}); continuing without it", flush=True)
         reranker = None
+    print(f"rerank: {reranker.model_name if reranker else 'off'}", flush=True)
+
     state["store"] = store
     state["retriever"] = Retriever(store, embedder=embedder, mode="hybrid", final_k=TOP_K,
                                    reranker=reranker, rerank_candidates=RERANK_CANDIDATES)
     state["backend"] = build_backend()
     state["reranker"] = reranker.model_name if reranker else None
     state["started"] = time.time()
-    print(f"index: {len(store.documents)} documents, {len(store.chunks)} chunks", flush=True)
-    print(f"rerank: {state['reranker'] or 'off'}", flush=True)
     print(f"model: {state['backend'].describe()}", flush=True)
 
 

@@ -71,6 +71,7 @@ def run_chat() -> None:
 
     rprint(f"[dim]index: {len(store.documents)} documents, {len(store.chunks)} chunks[/dim]")
     embedder = Embedder(resolve_model(store.manifest.get("embedding_model")))
+    embedder.warm()
 
     try:
         reranker = build_reranker()
