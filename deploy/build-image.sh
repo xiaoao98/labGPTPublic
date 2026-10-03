@@ -45,9 +45,19 @@ cat <<'NOTE'
 The image carries no corpus. Mount the model and the index when running it:
 
   docker run -d --name labgpt --restart unless-stopped -p 8090:8090 \
+      --user $(id -u):$(id -g) \
       -v /path/to/bge-small-en-v1.5:/models/bge-small-en-v1.5:ro \
       -v /path/to/index:/index:ro \
       -v /path/to/data:/data \
-      --env-file /path/to/labgpt.env \
+      --env-file /path/to/labgpt.docker.env \
       labgpt:TAG
+
+--user is there so the question log is written as you rather than as nobody, which is
+what the image runs as by default and what the mounted /data would then refuse.
+
+--env-file is NOT the file run.sh sources. Docker parses KEY=value and rejects a line
+beginning with "export", so convert it once:
+
+  sed 's/^export //' labgpt.env | grep -v '^#' | grep . > labgpt.docker.env
+  chmod 600 labgpt.docker.env
 NOTE

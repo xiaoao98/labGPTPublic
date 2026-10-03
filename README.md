@@ -359,6 +359,15 @@ the network instead of this machine, which is a decision rather than a default: 
   endpoint call, which is I/O, so a thread pool serves a lab and more workers would only
   multiply the index in memory
 
+Each browser keeps its own history of the questions asked from it, in `localStorage`. The
+whole response is stored, so reopening an entry shows the citations it actually had and
+costs no tokens, and an entry opened later is labelled with the date it was answered,
+because the corpus moves and an answer from three weeks ago may cite a protocol that has
+been revised since. Nothing about this history reaches the server: the server's own
+`LABGPT_LOG_PATH` is a separate record belonging to whoever runs the service, and keeping
+the personal one in the browser means it needs no accounts and makes no colleague's
+questions visible to another.
+
 The page renders the four outcomes differently, which is the point rather than decoration:
 a sourced answer with its citations, an unsourced one behind an amber banner saying it is
 not the lab's documentation, and refusals and withheld drafts in grey. Rendering an

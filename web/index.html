@@ -48,6 +48,24 @@
   .tag { display: inline-block; min-width: 30px; margin-right: 6px;
          color: var(--accent); font-weight: 600; }
   .src { color: var(--dim); }
+  .histbar { display: flex; align-items: baseline; justify-content: space-between;
+             margin: 26px 0 6px; }
+  .histbar h2 { font-size: 13px; font-weight: 600; color: var(--dim); margin: 0;
+                text-transform: uppercase; letter-spacing: .04em; }
+  .histbar button { background: transparent; color: var(--dim); border: 0; padding: 2px 0;
+                    font-size: 12px; text-decoration: underline; }
+  ul.hist { list-style: none; margin: 0; padding: 0; }
+  ul.hist li { border-top: 1px solid var(--line); }
+  ul.hist button.item { width: 100%; text-align: left; background: transparent;
+                        color: var(--fg); border: 0; padding: 9px 2px; font: inherit;
+                        display: flex; gap: 10px; align-items: baseline; border-radius: 0; }
+  ul.hist button.item:hover { background: var(--card); }
+  ul.hist .when { color: var(--dim); font-size: 12px; white-space: nowrap; }
+  ul.hist .what { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ul.hist .badge { font-size: 11px; color: var(--dim); white-space: nowrap; }
+  ul.hist .badge.unsourced { color: var(--warn-fg); }
+  .fromhist { font-size: 12px; color: var(--dim); margin-bottom: 10px;
+              padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
   .err { color: #b3261e; margin-top: 16px; }
   @media (prefers-color-scheme: dark) { .err { color: #f2b8b5; } }
 </style>
@@ -68,6 +86,12 @@
   </form>
 
   <div id="out"></div>
+
+  <div class="histbar" id="histbar" hidden>
+    <h2>Your recent questions</h2>
+    <button type="button" id="clearHist">clear</button>
+  </div>
+  <ul class="hist" id="hist"></ul>
 </div>
 
 <script>
@@ -91,6 +115,93 @@
     refused: "Nothing in the indexed documentation matched this.",
     withheld: "A draft was produced but cited no indexed document, so it is not shown.",
   };
+
+  // History lives in this browser and nowhere else. The server already logs every
+  // question, but that log belongs to whoever runs the service; this is the asker's own
+  // copy, and keeping it local means a personal history needs no identity, no accounts
+  // and no new way for one colleague's questions to be visible to another.
+  //
+  // The whole response is stored, not just the text, so reopening an entry shows the
+  // citations it actually had and costs no tokens. The cap is on characters rather than
+  // entries because one answer with six long sources is worth a dozen short ones, and
+  // localStorage is a few megabytes in total for the whole origin.
+  const HKEY = "labgpt_history";
+  const HIST_MAX_CHARS = 400000;
+  const HIST_MAX_ITEMS = 50;
+
+  function readHist() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(HKEY) || "[]");
+      return Array.isArray(raw) ? raw : [];
+    } catch (e) {
+      return [];   // unreadable, a private window, or storage disabled
+    }
+  }
+
+  function saveHist(items) {
+    while (items.length) {
+      try {
+        localStorage.setItem(HKEY, JSON.stringify(items));
+        return items;
+      } catch (e) {
+        // Quota exceeded, or storage is unavailable. Drop the oldest and try again;
+        // give up quietly rather than lose the answer that is on screen.
+        if (items.length <= 1) return [];
+        items = items.slice(0, Math.floor(items.length / 2));
+      }
+    }
+    return items;
+  }
+
+  function remember(data) {
+    let items = readHist();
+    items.unshift({ at: Date.now(), ...data });
+    items = items.slice(0, HIST_MAX_ITEMS);
+    let json = JSON.stringify(items);
+    while (items.length > 1 && json.length > HIST_MAX_CHARS) {
+      items.pop();
+      json = JSON.stringify(items);
+    }
+    renderHist(saveHist(items));
+  }
+
+  function when(ts) {
+    const d = new Date(ts), now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    return sameDay
+      ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : d.toLocaleDateString([], { month: "short", day: "numeric" });
+  }
+
+  function renderHist(items) {
+    items = items || readHist();
+    $("histbar").hidden = items.length === 0;
+    $("hist").innerHTML = items.map((item, i) =>
+      '<li><button type="button" class="item" data-i="' + i + '">' +
+      '<span class="when">' + esc(when(item.at)) + "</span>" +
+      '<span class="what">' + esc(item.question) + "</span>" +
+      '<span class="badge ' + esc(item.mode) + '">' +
+      (item.mode === "sourced" ? "[S" + (item.cited || []).join("][S") + "]"
+                               : esc(item.mode)) +
+      "</span></button></li>").join("");
+  }
+
+  $("hist").addEventListener("click", (e) => {
+    const button = e.target.closest("button.item");
+    if (!button) return;
+    const item = readHist()[Number(button.dataset.i)];
+    if (!item) return;
+    $("q").value = item.question;
+    render(item, item.at);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  $("clearHist").addEventListener("click", () => {
+    try { localStorage.removeItem(HKEY); } catch (e) { /* nothing to do */ }
+    renderHist([]);
+  });
+
+  renderHist();
 
   $("askForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -116,6 +227,7 @@
         return;
       }
       render(data);
+      remember(data);
     } catch (err) {
       $("out").innerHTML = '<div class="err">' + esc(String(err)) + "</div>";
     } finally {
@@ -128,7 +240,15 @@
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  function render(d) {
+  function render(d, savedAt) {
+    // A stored answer is shown with the date it was given, because the corpus moves: an
+    // answer from three weeks ago may cite a protocol that has been revised since, and
+    // nothing on this page would otherwise say so.
+    const from = savedAt
+      ? '<div class="fromhist">Saved answer from ' +
+        esc(new Date(savedAt).toLocaleString()) +
+        ". The documents may have changed since; ask again to refresh it.</div>"
+      : "";
     const banner = BANNERS[d.mode] ? '<div class="banner">' + BANNERS[d.mode] + "</div>" : "";
     let cites = "";
     if (d.cited && d.cited.length) {
@@ -144,7 +264,7 @@
     if (d.invalid_citations && d.invalid_citations.length)
       bits.push("invented citations: " + d.invalid_citations.join(", "));
     $("out").innerHTML =
-      '<div class="answer ' + d.mode + '">' + banner +
+      '<div class="answer ' + d.mode + '">' + from + banner +
       '<div class="text">' + esc(d.answer) + "</div>" + cites +
       '<div class="meta">' + bits.join(" · ") + "</div></div>";
   }
