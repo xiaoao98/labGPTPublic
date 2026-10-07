@@ -358,6 +358,34 @@ the network instead of this machine, which is a decision rather than a default: 
 - one worker on purpose. The index is loaded once and held; the wait in a request is the
   endpoint call, which is I/O, so a thread pool serves a lab and more workers would only
   multiply the index in memory
+- the embedding model is loaded at startup rather than on the first request, which costs
+  about five seconds of startup during which the port does not accept connections. A
+  watchdog on `/health` has to allow for that
+
+### What it does under load
+
+Questions are not queued one behind another. `/ask` is a synchronous function, which
+FastAPI runs in a worker thread, and the seven seconds it spends waiting on the endpoint
+is I/O that releases the GIL, so the waits of different people overlap.
+
+| simultaneous questions | each person waits |
+|---|---|
+| 1 | 7.5 s |
+| 10 | 7.3 s |
+| 20 | 7.6 s |
+| 40 | 8.2 s |
+| 60 | 15.5 s |
+
+Forty at once cost 0.6 seconds more than one, for a fortyfold increase in load. The step
+between 40 and 60 is `CapacityLimiter(40)`, AnyIO's default pool size, which Starlette
+never overrides: beyond forty in flight, the rest wait for a slot. Measured against a stub
+fixed at seven seconds to match the gateway's own engine time, so it measures this service
+rather than the model; forty concurrent questions have not been run against the live
+gateway, where the token quota would also apply.
+
+A single answer is about 7.5 seconds, of which the model is 95% and retrieval 0.3 s. Local
+optimisation is therefore not felt: the levers are reasoning effort, a faster deployment,
+or streaming, which does not reduce the total but replaces a blank wait with text.
 
 Each browser keeps its own history of the questions asked from it, in `localStorage`. The
 whole response is stored, so reopening an entry shows the citations it actually had and
@@ -392,11 +420,19 @@ that leaves the building.
 
 ## Deploying it
 
-The lab server this runs on has no internet access, no GPU, a Python too old to use, and
-no root for the account that runs the service. Containers would solve the first three and
-need the fourth, so the deployment is a bundle instead: one tarball holding an
-interpreter, every wheel, the application, the embedding model and an index. Nothing is
-downloaded on the far side, and nothing is installed system-wide.
+The lab server this runs on has no internet access, no GPU and a Python too old to use
+(3.9). There are two ways in, and `deploy/` holds both.
+
+**The bundle** needs nothing of the host at all, not even a container runtime: one tarball
+holding an interpreter, every wheel, the application, the embedding model and an index.
+Nothing is downloaded on the far side and nothing is installed system-wide. This is what
+runs today.
+
+**The image** needs a container runtime and membership of its group, which took a request
+to IT. What it buys is supervision: `--restart unless-stopped` brings the service back
+after a crash and after a reboot, which `nohup` cannot do.
+
+### The bundle
 
 Build it on a machine with internet, from the repository:
 
@@ -428,9 +464,27 @@ so on the server.
 `deploy/DEPLOY.md` travels inside the bundle and covers the rest: keeping it running past
 a logout, the `@reboot` entry, and what the index and the question log contain.
 
-Updating a deployment is the same path again: rebuild the index, rebuild the bundle, copy,
-install into a new directory, and switch over. There is no in-place update, which for a
-service this size is a feature rather than a gap.
+Updating is the same path again: rebuild the index, rebuild the bundle, copy, install into
+a new directory, and switch over. A code-only change does not need the whole 400 MB,
+though: the application is 68 KB of it, and replacing `app/` and restarting is enough.
+
+### The image
+
+```bash
+./deploy/build-image.sh push hpcharbor.example.edu/<project>   # or: save
+```
+
+431 MB, and it carries no corpus. The model and the index are mounted at runtime, because
+the index is the corpus and an image holding institutional documents is a thing that gets
+copied to laptops and registries without anyone deciding to; mounting them also means an
+index rebuild costs a volume swap rather than a rebuild, a push and a pull. The script
+prints the `docker run` line, including two things that are easy to get wrong: `--user`,
+so the question log is written as you rather than as the `nobody` the image runs as, and a
+converted env file, because Docker's `--env-file` rejects the `export` lines that
+`run.sh` sources.
+
+`linux/amd64` is pinned in both the Dockerfile and the build script. Built on an arm64
+laptop without it, the image loads on the server and then will not start.
 
 ## Where generation happens
 
@@ -637,55 +691,6 @@ how two private corpora came to be sitting untracked but committable during deve
 A private corpus is also a reason to be careful about which endpoint answers it. Sending
 it to a personal API key is a larger exposure than committing it would have been.
 
-## Known limitations
-
-- **Paraphrase.** Three questions written to share no vocabulary at all with their
-  source documents score 0.333 at success@6, and nothing tried has moved them: not
-  reranking with either model, not a larger candidate pool. Both retrieval legs are
-  defeated by the same thing, so the next place to look is the embedding model rather than
-  the ranking.
-- **Three questions is not a demonstrated improvement.** Reranking moves the end-to-end
-  score from 90 to 93 of 100 and the confidence intervals overlap. That is why it is
-  opt-in rather than on wherever it is cheap: the gain is not established at n=100, and a
-  default that varies by machine would put an unestablished difference into runs nobody
-  asked to differ.
-- **Fusion discards calibrated similarity.** Reciprocal rank fusion reads only ranks, so a
-  chunk both legs place in their top handful beats a chunk one leg is certain about. On
-  "what should I do if I stick myself with a needle" the correct entry has cosine 0.710
-  against a wrong one's 0.498 and still comes second. Leg weights exist and are left at
-  1.0; measurement says weighting is the wrong tool and the reranker is the right one.
-- **The abstention gate reads cosine, and the reranker's score is better calibrated.**
-  `q047` has the right document at rank 4 and is still refused, because that document's
-  cosine is 0.498 against a threshold of 0.62. A gate on the reranker's score would have
-  the signal it needs, but those logits are not comparable across queries, so it is not a
-  drop-in substitution.
-- **The abstention threshold is a compromise, not a solution.** Answerable and
-  unanswerable questions overlap in cosine, so no threshold separates them. 0.62 is where
-  accuracy peaks, chosen on the same questions it is scored on, and the citation gate
-  downstream is the second line of defence for what it lets through.
-- **One annotator.** The evaluation set is one person's judgement with no second annotator
-  and no agreement score, and its labels have been corrected four times.
-- **Paper sections are not expanded to whole documents,** unlike protocols. Deliberate,
-  and argued in `labrag/documents.py`, but it means a methods answer sees one chunk rather
-  than the section.
-- **Generated answers are not reproducible on the api path.** A reasoning deployment
-  refuses any temperature but its default, and `seed` is documented as best effort, so
-  identical inputs can give different answers and any comparison between configurations
-  has to treat the generated half as noisy.
-- **The unsourced fallback is unmeasured.** Everything in [Results](#results) was run with
-  the gate refusing. What `demo.py` now returns below the threshold has not been graded,
-  and the labelling that keeps it honest is a prompt instruction rather than a checked
-  gate: the citation validator cannot help when there are no citations to validate.
-- **The two entry points do not abstain alike, on purpose.** `demo.py` answers below the
-  gate and the CLI refuses, so a question can be refused by `ask` and answered by the chat
-  loop. That split is intended rather than pending: a person at a prompt is better served
-  by a general answer that says it is general than by a refusal, while `answer-all` feeds
-  an evaluation whose numbers depend on the gate holding. It does mean the chat loop is
-  not the thing [Results](#results) measured.
-- **`tools/` builds corpora, and is not covered by anything.** The four scripts that
-  produce an evaluation corpus have no tests and reference input files that are not in the
-  repository, so a corpus rebuild is checked by reading its output.
-
 ## Roadmap
 
 The retrieval work this file used to list as future is done: structure-aware chunking,
@@ -707,7 +712,7 @@ evaluation set. What the measurements now point at:
 | `labrag/cli.py` | `index`, `search`, `ask`, `eval`, `sweep`, `answer-all`, `selftest` |
 | `labrag/rerank.py` | Cross-encoder reranking over the fused candidates |
 | `serve.py`, `web/` | The HTTP service and its page |
-| `deploy/` | Offline bundle: build it here, install it there |
+| `deploy/` | Both deployments: the offline bundle and the container image |
 | `labrag/answerer.py` | Chat clients: OpenAI-shaped, Azure, local transformers; the two gates |
 | `demo.py` | Interactive chat loop over the index |
 | `labgpt_config.py` | Corpus paths, and the local model name |
