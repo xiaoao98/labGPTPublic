@@ -137,10 +137,10 @@ Mostly on the vocabulary this corpus is made of. Counted over the 678 indexed do
 |---|---|---|
 | `100,000 x g`, `1,500 × g` | 110 | reads the `x` as a letter; "times gravity" is meant |
 | `0.22 um`, `0.2 µm`, `0.2 μm` | 29 | three spellings of micron, none of them said as one |
-| primer sequences, `AAAACCGCTGATCACGCTCTG` | 526 | attempts to pronounce it as a word |
+| primer sequences, `ACGTACGTACGTACGTACGT` | 526 | attempts to pronounce it as a word |
 | molarity, `0.056 M` | 558 | "em" rather than "molar" |
 | `1,300 rpm` | 46 | usually fine, sometimes spelled out |
-| catalog numbers, `# 23225` | 20 | read as a quantity |
+| catalog numbers, `# 10000` | 20 | read as a quantity |
 
 None of this is handled yet. The text sent for synthesis is the answer with its citation
 markers removed and, when ungrounded, a disclosure in front — nothing else is rewritten.
