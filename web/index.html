@@ -87,6 +87,20 @@
   ul.hist .badge.unsourced { color: var(--warn-fg); }
   .fromhist { font-size: 12px; color: var(--dim); margin-bottom: 10px;
               padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+  /* voice */
+  .iconbtn { padding: 0; width: 42px; flex: 0 0 42px; display: grid; place-items: center;
+             background: var(--card); color: var(--fg); border: 1px solid var(--line); }
+  .iconbtn:hover { border-color: var(--accent); }
+  .iconbtn svg { width: 18px; height: 18px; display: block; }
+  .iconbtn.recording { background: #b3261e; border-color: #b3261e; color: #fff; }
+  .iconbtn.busy { opacity: .55; }
+  .speak { margin-top: 12px; display: flex; align-items: center; gap: 10px; }
+  .speak button { padding: 6px 12px; font-size: 13px; background: transparent;
+                  color: var(--accent); border: 1px solid var(--line); border-radius: 6px;
+                  display: inline-flex; align-items: center; gap: 7px; }
+  .speak button:hover { border-color: var(--accent); }
+  .speak svg { width: 14px; height: 14px; }
+  .speak .state { font-size: 12px; color: var(--dim); }
   .err { color: #b3261e; margin-top: 16px; }
   @media (prefers-color-scheme: dark) { .err { color: #f2b8b5; } }
 </style>
@@ -114,6 +128,14 @@
 
   <form id="askForm">
     <input type="text" id="q" placeholder="e.g. how do I thaw BJ cells" autocomplete="off">
+    <button type="button" class="iconbtn" id="mic" hidden
+            title="Ask by voice" aria-label="Ask by voice">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true">
+        <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+        <path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v4"></path>
+      </svg>
+    </button>
     <button type="submit" id="go">Ask</button>
   </form>
 
@@ -234,6 +256,103 @@
 
   renderHist();
 
+  // ---- voice ----------------------------------------------------------------------
+  // Both directions go through this service so the ElevenLabs key stays on the server.
+  // The page only ever talks to its own origin.
+  let voiceReady = false, lastAnswer = null, recorder = null, chunks = [], audio = null;
+
+  function speakControl() {
+    return '<div class="speak">' +
+      '<button type="button" id="speak">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M11 5 6 9H2v6h4l5 4V5z"></path>' +
+      '<path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>Read aloud</button>' +
+      '<span class="state" id="speakState"></span></div>';
+  }
+
+  // The server decides whether speech exists at all; the controls appear only when it
+  // does, rather than offering a button that fails.
+  (async () => {
+    try {
+      const h = await (await fetch("/health")).json();
+      voiceReady = !!h.voice;
+    } catch (e) { voiceReady = false; }
+    $("mic").hidden = !(voiceReady && navigator.mediaDevices &&
+                        navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  })();
+
+  $("out").addEventListener("click", async (e) => {
+    if (!e.target.closest("#speak") || !lastAnswer) return;
+    const button = e.target.closest("#speak");
+    button.disabled = true;
+    $("speakState").textContent = "generating\u2026";
+    try {
+      const res = await fetch("/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-LabGPT-Token": token },
+        body: JSON.stringify({ text: lastAnswer.answer, mode: lastAnswer.mode }),
+      });
+      if (!res.ok) throw new Error(((await res.json()) || {}).detail || "speech failed");
+      if (audio) audio.pause();
+      audio = new Audio(URL.createObjectURL(await res.blob()));
+      audio.onended = () => { $("speakState").textContent = ""; };
+      await audio.play();
+      $("speakState").textContent = "playing";
+    } catch (err) {
+      $("speakState").textContent = String(err.message || err);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  $("mic").addEventListener("click", async () => {
+    if (recorder && recorder.state === "recording") { recorder.stop(); return; }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      $("out").innerHTML = '<div class="err">The microphone is not available: ' +
+        esc(err.message || err) + "</div>";
+      return;
+    }
+    // Chrome and Firefox record webm/opus; Safari gives mp4. The type travels with the
+    // recording so the server does not have to guess.
+    const type = ["audio/webm", "audio/mp4", "audio/ogg"]
+      .find((t) => MediaRecorder.isTypeSupported(t)) || "";
+    recorder = new MediaRecorder(stream, type ? { mimeType: type } : {});
+    chunks = [];
+    recorder.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      $("mic").classList.remove("recording");
+      $("mic").classList.add("busy");
+      $("q").placeholder = "transcribing\u2026";
+      try {
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        const res = await fetch("/transcribe?mime=" +
+                                encodeURIComponent(blob.type || "audio/webm"), {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream",
+                     "X-LabGPT-Token": token },
+          body: blob,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "transcription failed");
+        $("q").value = data.text;
+        $("askForm").dispatchEvent(new Event("submit", { cancelable: true }));
+      } catch (err) {
+        $("out").innerHTML = '<div class="err">' + esc(err.message || err) + "</div>";
+      } finally {
+        $("mic").classList.remove("busy");
+        $("q").placeholder = "e.g. how do I thaw BJ cells";
+      }
+    };
+    recorder.start();
+    $("mic").classList.add("recording");
+    $("q").placeholder = "listening\u2026 click the mic again to stop";
+  });
+
   $("askForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const question = $("q").value.trim();
@@ -297,6 +416,8 @@
     $("out").innerHTML =
       '<div class="answer ' + d.mode + '">' + from + banner +
       '<div class="text">' + esc(d.answer) + "</div>" + cites +
-      '<div class="meta">' + bits.join(" · ") + "</div></div>";
+      '<div class="meta">' + bits.join(" · ") + "</div></div>" +
+      (voiceReady ? speakControl() : "");
+    lastAnswer = d;
   }
 </script>

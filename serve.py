@@ -26,8 +26,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from labrag.chat import (
@@ -37,6 +37,7 @@ from labrag.chat import (
 from labrag.embeddings import Embedder, resolve_model
 from labrag.retriever import Retriever
 from labrag.store import VectorStore
+from labrag import voice
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 LOG_PATH = os.environ.get("LABGPT_LOG_PATH")
@@ -125,6 +126,7 @@ def health() -> dict:
         "model": state["backend"].describe() if state.get("backend") else None,
         "rerank": state.get("reranker") or "off",
         "abstain_mode": ABSTAIN_MODE,
+        "voice": voice.configured(),
         "uptime_s": int(time.time() - state["started"]) if state.get("started") else 0,
     }
 
@@ -157,6 +159,44 @@ def _log(record: dict) -> None:
     except OSError as exc:
         # A log that cannot be written must not take the answer down with it.
         print(f"could not write to {LOG_PATH}: {exc}", flush=True)
+
+
+class Speech(BaseModel):
+    """What to say. Either an answer, which is rewritten for listening, or plain text."""
+
+    text: str = Field(default="", max_length=8000)
+    mode: str = Field(default="sourced", max_length=32)
+
+
+@app.post("/speak", dependencies=[Depends(require_token)])
+def speak(body: Speech) -> Response:
+    """Answer text to mp3, with the key kept on this side.
+
+    The spoken form is not the text on screen: citation markers are dropped, and an answer
+    that is not grounded in the corpus says so before anything else, because audio has no
+    banner to carry that.
+    """
+    text = voice.spoken_text({"answer": body.text, "mode": body.mode})
+    try:
+        audio = voice.speak(text)
+    except voice.VoiceError as exc:
+        _log({"event": "voice_error", "direction": "tts", "error": str(exc)[:300]})
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(content=audio, media_type="audio/mpeg",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.post("/transcribe", dependencies=[Depends(require_token)])
+def transcribe(audio: bytes = Body(default=b""),
+               mime: str = Query(default="audio/webm", max_length=64)) -> dict:
+    """A recording to text. The body is the raw audio the browser captured."""
+    try:
+        text = voice.transcribe(audio, mime)
+    except voice.VoiceError as exc:
+        _log({"event": "voice_error", "direction": "stt", "error": str(exc)[:300]})
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    _log({"event": "transcribed", "question": text, "bytes": len(audio)})
+    return {"text": text}
 
 
 @app.get("/")
