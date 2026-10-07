@@ -691,61 +691,6 @@ how two private corpora came to be sitting untracked but committable during deve
 A private corpus is also a reason to be careful about which endpoint answers it. Sending
 it to a personal API key is a larger exposure than committing it would have been.
 
-## Known limitations
-
-- **Paraphrase.** Three questions written to share no vocabulary at all with their
-  source documents score 0.333 at success@6, and nothing tried has moved them: not
-  reranking with either model, not a larger candidate pool. Both retrieval legs are
-  defeated by the same thing, so the next place to look is the embedding model rather than
-  the ranking.
-- **Three questions is not a demonstrated improvement.** Reranking moves the end-to-end
-  score from 90 to 93 of 100 and the confidence intervals overlap. That is why it is
-  opt-in rather than on wherever it is cheap: the gain is not established at n=100, and a
-  default that varies by machine would put an unestablished difference into runs nobody
-  asked to differ.
-- **Fusion discards calibrated similarity.** Reciprocal rank fusion reads only ranks, so a
-  chunk both legs place in their top handful beats a chunk one leg is certain about. On
-  "what should I do if I stick myself with a needle" the correct entry has cosine 0.710
-  against a wrong one's 0.498 and still comes second. Leg weights exist and are left at
-  1.0; measurement says weighting is the wrong tool and the reranker is the right one.
-- **The abstention gate reads cosine, and the reranker's score is better calibrated.**
-  `q047` has the right document at rank 4 and is still refused, because that document's
-  cosine is 0.498 against a threshold of 0.62. A gate on the reranker's score would have
-  the signal it needs, but those logits are not comparable across queries, so it is not a
-  drop-in substitution.
-- **The abstention threshold is a compromise, not a solution.** Answerable and
-  unanswerable questions overlap in cosine, so no threshold separates them. 0.62 is where
-  accuracy peaks, chosen on the same questions it is scored on, and the citation gate
-  downstream is the second line of defence for what it lets through.
-- **One annotator.** The evaluation set is one person's judgement with no second annotator
-  and no agreement score, and its labels have been corrected four times.
-- **Paper sections are not expanded to whole documents,** unlike protocols. Deliberate,
-  and argued in `labrag/documents.py`, but it means a methods answer sees one chunk rather
-  than the section.
-- **Generated answers are not reproducible on the api path.** A reasoning deployment
-  refuses any temperature but its default, and `seed` is documented as best effort, so
-  identical inputs can give different answers and any comparison between configurations
-  has to treat the generated half as noisy.
-- **The unsourced fallback is unmeasured.** Everything in [Results](#results) was run with
-  the gate refusing. What `demo.py` now returns below the threshold has not been graded,
-  and the labelling that keeps it honest is a prompt instruction rather than a checked
-  gate: the citation validator cannot help when there are no citations to validate.
-- **The two entry points do not abstain alike, on purpose.** `demo.py` answers below the
-  gate and the CLI refuses, so a question can be refused by `ask` and answered by the chat
-  loop. That split is intended rather than pending: a person at a prompt is better served
-  by a general answer that says it is general than by a refusal, while `answer-all` feeds
-  an evaluation whose numbers depend on the gate holding. It does mean the chat loop is
-  not the thing [Results](#results) measured.
-- **What is deployed is not supervised.** The bundle runs under `nohup`: it survives a
-  logout but not a crash, and nothing restarts it or says so. The image fixes this and is
-  not yet what runs.
-- **The service is HTTP.** The access token travels on every request and answers quote the
-  corpus, both in clear text on the network it is served over.
-- **A rate-limited gateway surfaces as a raw 502.** A 429 should back off and retry.
-- **`tools/` builds corpora, and is not covered by anything.** The four scripts that
-  produce an evaluation corpus have no tests and reference input files that are not in the
-  repository, so a corpus rebuild is checked by reading its output.
-
 ## Roadmap
 
 The retrieval work this file used to list as future is done: structure-aware chunking,
